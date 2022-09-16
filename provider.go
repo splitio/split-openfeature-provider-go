@@ -2,6 +2,7 @@ package split_openfeature_provider_go
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/open-feature/golang-sdk/pkg/openfeature"
@@ -10,8 +11,9 @@ import (
 
 const (
 	// errors
-	flagNotFound string = "FLAG_NOT_FOUND"
-	parseError   string = "PARSE_ERROR"
+	flagNotFound        string = "FLAG_NOT_FOUND"
+	parseError          string = "PARSE_ERROR"
+	targetingKeyMissing string = "TARGETING_KEY_MISSING"
 
 	// reasons
 	defaultReason  string = "DEFAULT"
@@ -29,16 +31,20 @@ func NewProvider(splitClient client.SplitClient) *SplitProvider {
 	}
 }
 
-// note: use pointer receiver if I need to make a modification to the provider
-
 func (provider *SplitProvider) Metadata() openfeature.Metadata {
 	return openfeature.Metadata{
 		Name: "Split",
 	}
 }
 
-func (provider *SplitProvider) BooleanEvaluation(flag string, defaultValue bool, evalCtx openfeature.EvaluationContext) openfeature.BoolResolutionDetail {
-	var evaluated = provider.evaluateTreatment(flag, evalCtx)
+func (provider *SplitProvider) BooleanEvaluation(flag string, defaultValue bool, evalCtx map[string]interface{}) openfeature.BoolResolutionDetail {
+	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
+	if err != nil {
+		return openfeature.BoolResolutionDetail{
+			Value:            defaultValue,
+			ResolutionDetail: resolutionDetailError(err),
+		}
+	}
 	if noTreatment(evaluated) {
 		return openfeature.BoolResolutionDetail{
 			Value:            defaultValue,
@@ -62,8 +68,14 @@ func (provider *SplitProvider) BooleanEvaluation(flag string, defaultValue bool,
 	}
 }
 
-func (provider *SplitProvider) StringEvaluation(flag string, defaultValue string, evalCtx openfeature.EvaluationContext) openfeature.StringResolutionDetail {
-	var evaluated = provider.evaluateTreatment(flag, evalCtx)
+func (provider *SplitProvider) StringEvaluation(flag string, defaultValue string, evalCtx map[string]interface{}) openfeature.StringResolutionDetail {
+	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
+	if err != nil {
+		return openfeature.StringResolutionDetail{
+			Value:            defaultValue,
+			ResolutionDetail: resolutionDetailError(err),
+		}
+	}
 	if noTreatment(evaluated) {
 		return openfeature.StringResolutionDetail{
 			Value:            defaultValue,
@@ -76,8 +88,14 @@ func (provider *SplitProvider) StringEvaluation(flag string, defaultValue string
 	}
 }
 
-func (provider *SplitProvider) FloatEvaluation(flag string, defaultValue float64, evalCtx openfeature.EvaluationContext) openfeature.FloatResolutionDetail {
-	var evaluated = provider.evaluateTreatment(flag, evalCtx)
+func (provider *SplitProvider) FloatEvaluation(flag string, defaultValue float64, evalCtx map[string]interface{}) openfeature.FloatResolutionDetail {
+	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
+	if err != nil {
+		return openfeature.FloatResolutionDetail{
+			Value:            defaultValue,
+			ResolutionDetail: resolutionDetailError(err),
+		}
+	}
 	if noTreatment(evaluated) {
 		return openfeature.FloatResolutionDetail{
 			Value:            defaultValue,
@@ -97,8 +115,14 @@ func (provider *SplitProvider) FloatEvaluation(flag string, defaultValue float64
 	}
 }
 
-func (provider *SplitProvider) IntEvaluation(flag string, defaultValue int64, evalCtx openfeature.EvaluationContext) openfeature.IntResolutionDetail {
-	var evaluated = provider.evaluateTreatment(flag, evalCtx)
+func (provider *SplitProvider) IntEvaluation(flag string, defaultValue int64, evalCtx map[string]interface{}) openfeature.IntResolutionDetail {
+	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
+	if err != nil {
+		return openfeature.IntResolutionDetail{
+			Value:            defaultValue,
+			ResolutionDetail: resolutionDetailError(err),
+		}
+	}
 	if noTreatment(evaluated) {
 		return openfeature.IntResolutionDetail{
 			Value:            defaultValue,
@@ -118,8 +142,14 @@ func (provider *SplitProvider) IntEvaluation(flag string, defaultValue int64, ev
 	}
 }
 
-func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interface{}, evalCtx openfeature.EvaluationContext) openfeature.InterfaceResolutionDetail {
-	var evaluated = provider.evaluateTreatment(flag, evalCtx)
+func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interface{}, evalCtx map[string]interface{}) openfeature.InterfaceResolutionDetail {
+	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
+	if err != nil {
+		return openfeature.InterfaceResolutionDetail{
+			Value:            defaultValue,
+			ResolutionDetail: resolutionDetailError(err),
+		}
+	}
 	if noTreatment(evaluated) {
 		return openfeature.InterfaceResolutionDetail{
 			Value:            defaultValue,
@@ -127,7 +157,7 @@ func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interf
 		}
 	}
 	var data map[string]interface{}
-	err := json.Unmarshal([]byte(evaluated), &data)
+	err = json.Unmarshal([]byte(evaluated), &data)
 	if err != nil {
 		return openfeature.InterfaceResolutionDetail{
 			Value:            defaultValue,
@@ -135,7 +165,7 @@ func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interf
 		}
 	} else {
 		return openfeature.InterfaceResolutionDetail{
-			Value:            defaultValue,
+			Value:            data,
 			ResolutionDetail: resolutionDetailFound(evaluated),
 		}
 	}
@@ -148,9 +178,13 @@ func (provider *SplitProvider) Hooks() []openfeature.Hook {
 
 // *** Helpers ***
 
-func (provider *SplitProvider) evaluateTreatment(flag string, evalContext openfeature.EvaluationContext) string {
-	targetingKey := evalContext.TargetingKey
-	return provider.client.Treatment(targetingKey, flag, nil)
+func (provider *SplitProvider) evaluateTreatment(flag string, evalContext map[string]interface{}) (string, error) {
+	if targetingKey, ok := evalContext[openfeature.TargetingKey]; ok {
+		return provider.client.Treatment(targetingKey, flag, nil), nil
+	} else {
+		return "control", errors.New(targetingKeyMissing)
+	}
+
 }
 
 func noTreatment(treatment string) bool {
@@ -166,6 +200,10 @@ func resolutionDetailFound(variant string) openfeature.ResolutionDetail {
 
 func resolutionDetailParseError(variant string) openfeature.ResolutionDetail {
 	return resolutionDetail(parseError, errorReason, variant)
+}
+
+func resolutionDetailError(err error) openfeature.ResolutionDetail {
+	return resolutionDetail(err.Error(), errorReason, "")
 }
 
 func resolutionDetail(error string, reason string, variant string) openfeature.ResolutionDetail {
