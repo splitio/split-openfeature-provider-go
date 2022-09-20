@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/open-feature/golang-sdk/pkg/openfeature"
+	"github.com/open-feature/go-sdk/pkg/openfeature"
 	"github.com/splitio/go-client/splitio/client"
 )
 

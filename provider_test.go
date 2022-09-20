@@ -1,7 +1,7 @@
 package split_openfeature_provider_go
 
 import (
-	"github.com/open-feature/golang-sdk/pkg/openfeature"
+	"github.com/open-feature/go-sdk/pkg/openfeature"
 	"github.com/splitio/go-client/splitio/client"
 	"github.com/splitio/go-client/splitio/conf"
 	"github.com/splitio/go-toolkit/logging"
@@ -342,8 +342,8 @@ func TestBooleanFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != errorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "" {
-		t.Errorf("Expected empty variant, got %s", resultDetails.Variant)
+	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
 
@@ -373,8 +373,8 @@ func TestIntegerFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != errorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "" {
-		t.Errorf("Expected empty variant, got %s", resultDetails.Variant)
+	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
 
@@ -404,8 +404,8 @@ func TestFloatFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != errorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "" {
-		t.Errorf("Expected empty variant, got %s", resultDetails.Variant)
+	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
 
@@ -438,7 +438,7 @@ func TestObjectFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != errorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "" {
-		t.Errorf("Expected empty variant, got %s", resultDetails.Variant)
+	} else if resultDetails.Variant != "32" {
+		t.Errorf("Expected variant to be string of integer, got %s", resultDetails.Variant)
 	}
 }

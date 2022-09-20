@@ -32,8 +32,8 @@ github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7J
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
 github.com/onsi/gomega v1.20.2 h1:8uQq0zMgLEfa0vRrrBgaJF2gyW9Da9BmfGV+OyUzfkY=
 github.com/onsi/gomega v1.20.2/go.mod h1:iYAIXgPSaDHak0LCMA+AWBpIKBr8WZicMxnE8luStNc=
-github.com/open-feature/golang-sdk v0.3.0 h1:uyd18UVj8qaORXdFl6f2ZABAoeszMidousUA5vUHdIo=
-github.com/open-feature/golang-sdk v0.3.0/go.mod h1:AcHh6hParWb2KPnkLUII0a060E6byMdW/YSGvfeHiVQ=
+github.com/open-feature/go-sdk v0.4.0 h1:4MC58EBEqsZRPrBfjywTEZXlgiD7lFQVSz0XIJQIRLM=
+github.com/open-feature/go-sdk v0.4.0/go.mod h1:rLTOsXIC5wJ/5iVZ0LOTz3/ahJmzxhzWcJTS81AaSqM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/splitio/go-client v6.1.1-0.20210611192632-af2ff877b14a+incompatible h1:ahRviKx2RNNwK2b9NQbD9Iv1DLfHn+KHoBXwmbQ1EgY=
 github.com/splitio/go-client v6.1.1-0.20210611192632-af2ff877b14a+incompatible/go.mod h1:dJcPPOO+DlFMELdWAqGUcHTXGvGw0km+UEZJie7Hejk=
