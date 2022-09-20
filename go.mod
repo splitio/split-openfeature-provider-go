@@ -1,4 +1,4 @@
-module github.com/splitio/split-openfeature-provider-go/v1
+module github.com/splitio/split-openfeature-provider-go
 
 go 1.19
 
