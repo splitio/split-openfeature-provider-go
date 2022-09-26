@@ -15,6 +15,7 @@ import (
     "github.com/open-feature/go-sdk/pkg/openfeature"
     "github.com/splitio/go-client/v6/splitio/client"
     "github.com/splitio/go-client/v6/splitio/conf"
+    splitProvider "github.com/splitio/split-openfeature-provider-go"
 )
 
 cfg := conf.Default()
@@ -23,14 +24,14 @@ if err != nil {
     // SDK initialization error
 }
 
-client := factory.Client()
+splitClient := factory.Client()
 
-err = client.BlockUntilReady(10)
+err = splitClient.BlockUntilReady(10)
 if err != nil {
     // SDK timeout error
 }
 
-provider := split_openfeature_provider_go.NewProvider(*splitClient)
+provider := splitProvider.NewProvider(*splitClient)
 openfeature.SetProvider(provider)
 ```
 
