@@ -15,6 +15,7 @@ import (
     "github.com/open-feature/go-sdk/pkg/openfeature"
     "github.com/splitio/go-client/v6/splitio/client"
     "github.com/splitio/go-client/v6/splitio/conf"
+    "github.com/splitio/split-openfeature-provider-go"
 )
 
 cfg := conf.Default()
