@@ -3,6 +3,7 @@ package split_openfeature_provider_go
 import (
 	"encoding/json"
 	"errors"
+	"github.com/splitio/go-client/splitio/conf"
 	"strconv"
 
 	"github.com/open-feature/go-sdk/pkg/openfeature"
@@ -25,10 +26,24 @@ type SplitProvider struct {
 	client client.SplitClient
 }
 
-func NewProvider(splitClient client.SplitClient) *SplitProvider {
+func NewProvider(splitClient client.SplitClient) (*SplitProvider, error) {
 	return &SplitProvider{
 		client: splitClient,
+	}, nil
+}
+
+func NewProviderSimple(apiKey string) (*SplitProvider, error) {
+	cfg := conf.Default()
+	factory, err := client.NewSplitFactory(apiKey, cfg)
+	if err != nil {
+		return nil, err
 	}
+	splitClient := factory.Client()
+	err = splitClient.BlockUntilReady(10)
+	if err != nil {
+		return nil, err
+	}
+	return NewProvider(*splitClient)
 }
 
 func (provider *SplitProvider) Metadata() openfeature.Metadata {
