@@ -8,8 +8,23 @@ This Provider is designed to allow the use of OpenFeature with Split, the platfo
 This SDK is compatible with Go 1.19 and higher.
 
 ## Getting started
-Below is a simple example that describes the instantiation of the Split Provider. Please see the [OpenFeature Documentation](https://docs.openfeature.dev/docs/reference/concepts/evaluation-api) for details on how to use the OpenFeature SDK. Please see the [Split Documentation](https://help.split.io/hc/en-us/articles/360020093652-Go-SDK#initialization) for details on creating a SplitClient.
+Below is a simple example that describes the instantiation of the Split Provider. Please see the [OpenFeature Documentation](https://docs.openfeature.dev/docs/reference/concepts/evaluation-api) for details on how to use the OpenFeature SDK.
 
+```go
+import (
+    "github.com/open-feature/go-sdk/pkg/openfeature"
+    splitProvider "github.com/splitio/split-openfeature-provider-go"
+)
+
+provider, err := splitProvider.NewProviderSimple("YOUR_SDK_TYPE_API_KEY")
+if err != nil {
+    // Provider creation error
+}
+openfeature.SetProvider(provider)
+
+```
+
+If you are more familiar with Split or want access to other initialization options, you can provide a `SplitClient` to the constructor. See the [Split Go SDK Documentation](https://help.split.io/hc/en-us/articles/360020093652-Go-SDK#initialization) for more information.
 ```go
 import (
     "github.com/open-feature/go-sdk/pkg/openfeature"
@@ -31,7 +46,10 @@ if err != nil {
     // SDK timeout error
 }
 
-provider := splitProvider.NewProvider(*splitClient)
+provider, err := splitProvider.NewProvider(*splitClient)
+if err != nil {
+    // Provider creation error
+}
 openfeature.SetProvider(provider)
 ```
 
