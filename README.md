@@ -26,7 +26,7 @@ if err != nil {
 
 splitClient := factory.Client()
 
-err = client.BlockUntilReady(10)
+err = splitClient.BlockUntilReady(10)
 if err != nil {
     // SDK timeout error
 }
