@@ -25,7 +25,10 @@ func create(t *testing.T) *openfeature.Client {
 		// error timeout
 		t.Error("Split sdk timeout error")
 	}
-	provider := NewProvider(*splitClient)
+	provider, err := NewProvider(*splitClient)
+	if err != nil {
+		t.Error(err)
+	}
 	if provider == nil {
 		t.Error("Error creating Split Provider")
 	}
@@ -37,6 +40,16 @@ func evaluationContext() openfeature.EvaluationContext {
 	return openfeature.EvaluationContext{
 		TargetingKey: "key",
 		Attributes:   nil,
+	}
+}
+
+func TestCreateSimple(t *testing.T) {
+	provider, err := NewProviderSimple("localhost")
+	if err != nil {
+		t.Error(err)
+	}
+	if provider == nil {
+		t.Error("Error creating Split Provider")
 	}
 }
 
