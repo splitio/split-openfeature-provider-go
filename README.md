@@ -24,7 +24,7 @@ if err != nil {
     // SDK initialization error
 }
 
-client := factory.Client()
+splitClient := factory.Client()
 
 err = client.BlockUntilReady(10)
 if err != nil {
