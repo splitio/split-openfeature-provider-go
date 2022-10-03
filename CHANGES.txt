@@ -1,2 +1,2 @@
 1.0.0
-- 09/28/2022. Up to date with spec v0.5.0 and go sdk v0.5.0
+- 10/3/2022. Up to date with spec v0.5.0 and go sdk v0.5.0
