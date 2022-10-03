@@ -1,6 +1,7 @@
 package split_openfeature_provider_go
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/splitio/go-client/splitio/conf"
 	"strconv"
@@ -39,14 +40,14 @@ func (provider *SplitProvider) Metadata() openfeature.Metadata {
 	}
 }
 
-func (provider *SplitProvider) BooleanEvaluation(flag string, defaultValue bool, evalCtx map[string]interface{}) openfeature.BoolResolutionDetail {
-	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
-	if err != "" {
+func (provider *SplitProvider) BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, evalCtx openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
+	if noTargetingKey(evalCtx) {
 		return openfeature.BoolResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailError(err),
+			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
+	evaluated := provider.evaluateTreatment(flag, evalCtx)
 	if noTreatment(evaluated) {
 		return openfeature.BoolResolutionDetail{
 			Value:                    defaultValue,
@@ -66,18 +67,18 @@ func (provider *SplitProvider) BooleanEvaluation(flag string, defaultValue bool,
 	}
 	return openfeature.BoolResolutionDetail{
 		Value:                    value,
-		ProviderResolutionDetail: resolutionDetailFound(evaluated),
+		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
 	}
 }
 
-func (provider *SplitProvider) StringEvaluation(flag string, defaultValue string, evalCtx map[string]interface{}) openfeature.StringResolutionDetail {
-	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
-	if err != "" {
+func (provider *SplitProvider) StringEvaluation(ctx context.Context, flag string, defaultValue string, evalCtx openfeature.FlattenedContext) openfeature.StringResolutionDetail {
+	if noTargetingKey(evalCtx) {
 		return openfeature.StringResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailError(err),
+			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
+	evaluated := provider.evaluateTreatment(flag, evalCtx)
 	if noTreatment(evaluated) {
 		return openfeature.StringResolutionDetail{
 			Value:                    defaultValue,
@@ -86,18 +87,18 @@ func (provider *SplitProvider) StringEvaluation(flag string, defaultValue string
 	}
 	return openfeature.StringResolutionDetail{
 		Value:                    evaluated,
-		ProviderResolutionDetail: resolutionDetailFound(evaluated),
+		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
 	}
 }
 
-func (provider *SplitProvider) FloatEvaluation(flag string, defaultValue float64, evalCtx map[string]interface{}) openfeature.FloatResolutionDetail {
-	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
-	if err != "" {
+func (provider *SplitProvider) FloatEvaluation(ctx context.Context, flag string, defaultValue float64, evalCtx openfeature.FlattenedContext) openfeature.FloatResolutionDetail {
+	if noTargetingKey(evalCtx) {
 		return openfeature.FloatResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailError(err),
+			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
+	evaluated := provider.evaluateTreatment(flag, evalCtx)
 	if noTreatment(evaluated) {
 		return openfeature.FloatResolutionDetail{
 			Value:                    defaultValue,
@@ -113,18 +114,18 @@ func (provider *SplitProvider) FloatEvaluation(flag string, defaultValue float64
 	}
 	return openfeature.FloatResolutionDetail{
 		Value:                    floatEvaluated,
-		ProviderResolutionDetail: resolutionDetailFound(evaluated),
+		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
 	}
 }
 
-func (provider *SplitProvider) IntEvaluation(flag string, defaultValue int64, evalCtx map[string]interface{}) openfeature.IntResolutionDetail {
-	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
-	if err != "" {
+func (provider *SplitProvider) IntEvaluation(ctx context.Context, flag string, defaultValue int64, evalCtx openfeature.FlattenedContext) openfeature.IntResolutionDetail {
+	if noTargetingKey(evalCtx) {
 		return openfeature.IntResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailError(err),
+			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
+	evaluated := provider.evaluateTreatment(flag, evalCtx)
 	if noTreatment(evaluated) {
 		return openfeature.IntResolutionDetail{
 			Value:                    defaultValue,
@@ -140,18 +141,18 @@ func (provider *SplitProvider) IntEvaluation(flag string, defaultValue int64, ev
 	}
 	return openfeature.IntResolutionDetail{
 		Value:                    intEvaluated,
-		ProviderResolutionDetail: resolutionDetailFound(evaluated),
+		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
 	}
 }
 
-func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interface{}, evalCtx map[string]interface{}) openfeature.InterfaceResolutionDetail {
-	var evaluated, err = provider.evaluateTreatment(flag, evalCtx)
-	if err != "" {
+func (provider *SplitProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue interface{}, evalCtx openfeature.FlattenedContext) openfeature.InterfaceResolutionDetail {
+	if noTargetingKey(evalCtx) {
 		return openfeature.InterfaceResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailError(err),
+			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
+	evaluated := provider.evaluateTreatment(flag, evalCtx)
 	if noTreatment(evaluated) {
 		return openfeature.InterfaceResolutionDetail{
 			Value:                    defaultValue,
@@ -168,7 +169,7 @@ func (provider *SplitProvider) ObjectEvaluation(flag string, defaultValue interf
 	} else {
 		return openfeature.InterfaceResolutionDetail{
 			Value:                    data,
-			ProviderResolutionDetail: resolutionDetailFound(evaluated),
+			ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
 		}
 	}
 
@@ -180,13 +181,13 @@ func (provider *SplitProvider) Hooks() []openfeature.Hook {
 
 // *** Helpers ***
 
-func (provider *SplitProvider) evaluateTreatment(flag string, evalContext map[string]interface{}) (string, openfeature.ErrorCode) {
-	if targetingKey, ok := evalContext[openfeature.TargetingKey]; ok {
-		return provider.client.Treatment(targetingKey, flag, nil), ""
-	} else {
-		return "control", openfeature.TargetingKeyMissingCode
-	}
+func (provider *SplitProvider) evaluateTreatment(flag string, evalContext openfeature.FlattenedContext) string {
+	return provider.client.Treatment(evalContext[openfeature.TargetingKey], flag, nil)
+}
 
+func noTargetingKey(evalContext openfeature.FlattenedContext) bool {
+	_, ok := evalContext[openfeature.TargetingKey]
+	return !ok
 }
 
 func noTreatment(treatment string) bool {
@@ -200,11 +201,6 @@ func resolutionDetailNotFound(variant string) openfeature.ProviderResolutionDeta
 		openfeature.DefaultReason,
 		variant)
 }
-func resolutionDetailFound(variant string) openfeature.ProviderResolutionDetail {
-	return providerResolutionDetail(
-		openfeature.TargetingMatchReason,
-		variant)
-}
 
 func resolutionDetailParseError(variant string) openfeature.ProviderResolutionDetail {
 	return providerResolutionDetailError(
@@ -213,9 +209,9 @@ func resolutionDetailParseError(variant string) openfeature.ProviderResolutionDe
 		variant)
 }
 
-func resolutionDetailError(err openfeature.ErrorCode) openfeature.ProviderResolutionDetail {
+func resolutionDetailTargetingKeyMissing() openfeature.ProviderResolutionDetail {
 	return providerResolutionDetailError(
-		openfeature.NewGeneralResolutionError(string(err)),
+		openfeature.NewTargetingKeyMissingResolutionError("Targeting key is required and missing."),
 		openfeature.ErrorReason,
 		"")
 }
@@ -228,9 +224,9 @@ func providerResolutionDetailError(error openfeature.ResolutionError, reason ope
 	}
 }
 
-func providerResolutionDetail(reason openfeature.Reason, variant string) openfeature.ProviderResolutionDetail {
+func resolutionDetailTargetingMatch(variant string) openfeature.ProviderResolutionDetail {
 	return openfeature.ProviderResolutionDetail{
-		Reason:  reason,
+		Reason:  openfeature.TargetingMatchReason,
 		Variant: variant,
 	}
 }
