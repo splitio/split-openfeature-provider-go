@@ -3,7 +3,7 @@ module github.com/splitio/split-openfeature-provider-go
 go 1.19
 
 require (
-	github.com/open-feature/go-sdk v0.4.0
+	github.com/open-feature/go-sdk v0.5.0
 	github.com/splitio/go-client v6.1.1-0.20210611192632-af2ff877b14a+incompatible
 	github.com/splitio/go-toolkit v4.2.1-0.20210714181516-85e7c471376a+incompatible
 )
