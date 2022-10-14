@@ -37,10 +37,7 @@ func create(t *testing.T) *openfeature.Client {
 }
 
 func evaluationContext() openfeature.EvaluationContext {
-	return openfeature.EvaluationContext{
-		TargetingKey: "key",
-		Attributes:   nil,
-	}
+	return openfeature.NewEvaluationContext("key", nil)
 }
 
 func TestCreateSimple(t *testing.T) {
@@ -132,10 +129,7 @@ func TestGetBooleanWithKeySplit(t *testing.T) {
 		t.Error("Result was false, but should have been true as set in split.yaml")
 	}
 
-	evalCtx = openfeature.EvaluationContext{
-		TargetingKey: "randomKey",
-		Attributes:   nil,
-	}
+	evalCtx = openfeature.NewEvaluationContext("randomKey", nil)
 	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())

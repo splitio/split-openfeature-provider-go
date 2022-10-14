@@ -38,6 +38,8 @@ github.com/open-feature/go-sdk v0.5.0 h1:1Y3TYoiZn8yhez9SS6VkS0n9WTfIDst1QDGV92W
 github.com/open-feature/go-sdk v0.5.0/go.mod h1:5yoSk6QrkAHXKQW9pD+ejxOx3uXUqJwoHmwEK4hlZvk=
 github.com/open-feature/go-sdk v0.5.1 h1:gra5dYqcgz3DuyKuOA3TIXS8MuYqNCTVgJpNGemkAQ8=
 github.com/open-feature/go-sdk v0.5.1/go.mod h1:5yoSk6QrkAHXKQW9pD+ejxOx3uXUqJwoHmwEK4hlZvk=
+github.com/open-feature/go-sdk v0.6.0 h1:/u1XH4msHeChaen65Alfk139/ifu8ZS3mLt37CenR5k=
+github.com/open-feature/go-sdk v0.6.0/go.mod h1:5yoSk6QrkAHXKQW9pD+ejxOx3uXUqJwoHmwEK4hlZvk=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/splitio/go-client v6.1.1-0.20210611192632-af2ff877b14a+incompatible h1:ahRviKx2RNNwK2b9NQbD9Iv1DLfHn+KHoBXwmbQ1EgY=
 github.com/splitio/go-client v6.1.1-0.20210611192632-af2ff877b14a+incompatible/go.mod h1:dJcPPOO+DlFMELdWAqGUcHTXGvGw0km+UEZJie7Hejk=
