@@ -60,17 +60,17 @@ One important note is that the Split Provider **requires a targeting key** to be
 ```go
 client := openfeature.NewClient("CLIENT_NAME");
 
-evaluationContext := openfeature.EvaluationContext{TargetingKey: "TARGETING_KEY"}
-boolValue := client.BooleanValue("boolFlag", false, evaluationContext, openfeature.EvaluationOptions{});
+evaluationContext := openfeature.NewEvaluationContext("TARGETING_KEY", nil)
+boolValue := client.BooleanValue(nil, "boolFlag", false, evaluationContext)
 ```
 If the same targeting key is used repeatedly, the evaluation context may be set at the client level 
 ```go
-evaluationContext := openfeature.EvaluationContext{TargetingKey: "TARGETING_KEY"}
+evaluationContext := openfeature.NewEvaluationContext("TARGETING_KEY", nil)
 client.SetEvaluationContext(context)
 ```
 or at the OpenFeatureAPI level 
 ```go
-evaluationContext := openfeature.EvaluationContext{TargetingKey: "TARGETING_KEY"}
+evaluationContext := openfeature.NewEvaluationContext("TARGETING_KEY", nil)
 openfeature.SetEvaluationContext(context)
 ````
 If the context was set at the client or api level, it is not required to provide it during flag evaluation.
