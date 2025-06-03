@@ -2,9 +2,13 @@ package split_openfeature_provider_go
 
 import (
 	"context"
+	"os"
+	"os/user"
+	"path"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/splitio/go-client/v6/splitio/client"
@@ -46,12 +50,45 @@ func evaluationContext() openfeature.EvaluationContext {
 }
 
 func TestCreateSimple(t *testing.T) {
+	usr, err := user.Current()
+	if err != nil {
+		t.Fatalf("Error fetching current user: %v", err)
+	}
+
+	// Check if .splits file already exists
+	splitFilePath := path.Join(usr.HomeDir, ".splits")
+	fileExists := false
+	if _, err := os.Stat(splitFilePath); err == nil {
+		fileExists = true
+	}
+
+	// Only create and clean up the file if it doesn't already exist
+	if !fileExists {
+		// Write test data to the .splits file
+
+		testData := []byte("test_feature on\n")
+
+		if err := os.WriteFile(splitFilePath, testData, 0644); err != nil {
+			t.Fatalf("Error creating .splits file: %v", err)
+		}
+
+		// Clean up only if we created the file
+		defer func(name string) {
+			err := os.Remove(name)
+			if err != nil {
+				t.Errorf("Error removing .splits file: %v", err)
+			}
+		}(splitFilePath)
+	}
+
+	// Test the provider creation
 	provider, err := NewProviderSimple("localhost")
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Error creating Split Provider: %v", err)
 	}
+
 	if provider == nil {
-		t.Error("Error creating Split Provider")
+		t.Error("Provider should not be nil")
 	}
 }
 
@@ -59,12 +96,14 @@ func TestUseDefault(t *testing.T) {
 	ofClient := create(t)
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
+	
+	time.Sleep(1 * time.Millisecond)
 
 	result, err := ofClient.BooleanValue(context.TODO(), flagName, false, evalCtx)
 	if err == nil {
 		t.Error("Should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
+		t.Errorf("Unexpected error occurred: %s", err.Error())
 	} else if result == true {
 		t.Error("Result was true, but should have been default value of false")
 	}
