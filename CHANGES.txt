@@ -2,5 +2,5 @@
 - 10/3/2022. Up to date with spec v0.5.0 and go sdk v0.5.0
 1.0.1
 - 10/14/2022. Up to date with spec v0.5.0 and go sdk v0.6.0
-1.0.2
+1.1.0
 - 6/3/2025. Up to date with OpenFeature spec v0.8.0 and go sdk v1.15.0. Harness Go Client v6.7.0

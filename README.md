@@ -85,9 +85,9 @@ Please see [Contributors Guide](CONTRIBUTORS-GUIDE.md) to find all you need to s
 ## License
 Licensed under the Apache License, Version 2.0. See: [Apache License](http://www.apache.org/licenses/).
 
-## About Split
+## About Harness FME (Formerly Split.io)
  
-Split, now a part of Harness, is a leading Feature Delivery Platform for engineering teams that want to confidently deploy features as fast as they can develop them. Split’s fine-grained management, real-time monitoring, and data-driven experimentation ensure that new features will improve the customer experience without breaking or degrading performance. Companies like Twilio, Salesforce, GoDaddy and WePay have trusted Split to power their feature delivery.
+Harness Feature Management and Experimentation (formerly Split) is a leading Feature Delivery Platform for engineering teams that want to confidently deploy features as fast as they can develop them. Split’s fine-grained management, real-time monitoring, and data-driven experimentation ensure that new features will improve the customer experience without breaking or degrading performance. Companies like Twilio, Salesforce, GoDaddy and WePay have trusted Split to power their feature delivery.
  
 To learn more about Harness Feature Management and Experimentation (formerly Split), visit the [Harness website](https://www.harness.io/products/feature-management-experimentation) or contact [Harness Sales](https://harness.io/contact/sales).
  
@@ -100,7 +100,7 @@ Harness  has built and maintains SDKs for:
 * Ruby [Github](https://github.com/splitio/ruby-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/ruby-sdk)
 * PHP [Github](https://github.com/splitio/php-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/php-sdk)
 * Python [Github](https://github.com/splitio/python-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/python-sdk)
-* GO [Github](https://github.com/splitio/go-client) [Docs](https://help.split.io/hc/en-us/articles/360020093652-Go-SDK)
+* GO [Github](https://github.com/splitio/go-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/go-sdk)
 * Android [Github](https://github.com/splitio/android-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/client-side-sdks/android-sdk)
 * iOS [Github](https://github.com/splitio/ios-client) [Docs](https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/client-side-sdks/ios-sdk)
  
