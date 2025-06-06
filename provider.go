@@ -3,11 +3,12 @@ package split_openfeature_provider_go
 import (
 	"context"
 	"encoding/json"
-	"github.com/splitio/go-client/splitio/conf"
 	"strconv"
 
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/client"
 )
 
 type SplitProvider struct {
