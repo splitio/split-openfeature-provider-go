@@ -96,7 +96,7 @@ func TestUseDefault(t *testing.T) {
 	ofClient := create(t)
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
-	
+
 	time.Sleep(1 * time.Millisecond)
 
 	result, err := ofClient.BooleanValue(context.TODO(), flagName, false, evalCtx)
