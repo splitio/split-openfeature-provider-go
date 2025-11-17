@@ -3,11 +3,12 @@ package split_openfeature_provider_go
 import (
 	"context"
 	"encoding/json"
-	"github.com/splitio/go-client/splitio/conf"
 	"strconv"
 
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
+	"github.com/open-feature/go-sdk/openfeature"
+
+	"github.com/splitio/go-client/v6/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
 )
 
 type SplitProvider struct {
@@ -152,27 +153,27 @@ func (provider *SplitProvider) ObjectEvaluation(ctx context.Context, flag string
 			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
 		}
 	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
+	evaluated := provider.evaluateTreatmentWithConfig(flag, evalCtx)
+	if noTreatment(evaluated.Treatment) {
 		return openfeature.InterfaceResolutionDetail{
 			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
+			ProviderResolutionDetail: resolutionDetailNotFound(evaluated.Treatment),
 		}
 	}
 	var data map[string]interface{}
-	parseErr := json.Unmarshal([]byte(evaluated), &data)
-	if parseErr != nil {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailParseError(evaluated),
-		}
-	} else {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    data,
-			ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
+	if evaluated.Config != nil {
+		if parseErr := json.Unmarshal([]byte(*evaluated.Config), &data); parseErr != nil {
+			return openfeature.InterfaceResolutionDetail{
+				Value:                    defaultValue,
+				ProviderResolutionDetail: resolutionDetailParseError(evaluated.Treatment),
+			}
 		}
 	}
 
+	return openfeature.InterfaceResolutionDetail{
+		Value:                    data,
+		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated.Treatment),
+	}
 }
 
 func (provider *SplitProvider) Hooks() []openfeature.Hook {
@@ -183,6 +184,10 @@ func (provider *SplitProvider) Hooks() []openfeature.Hook {
 
 func (provider *SplitProvider) evaluateTreatment(flag string, evalContext openfeature.FlattenedContext) string {
 	return provider.client.Treatment(evalContext[openfeature.TargetingKey], flag, nil)
+}
+
+func (provider *SplitProvider) evaluateTreatmentWithConfig(flag string, evalContext openfeature.FlattenedContext) client.TreatmentResult {
+	return provider.client.TreatmentWithConfig(evalContext[openfeature.TargetingKey], flag, nil)
 }
 
 func noTargetingKey(evalContext openfeature.FlattenedContext) bool {
