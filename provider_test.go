@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
-	"github.com/splitio/go-client/splitio/conf"
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
 	"github.com/splitio/go-toolkit/logging"
 )
 
