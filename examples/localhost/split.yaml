@@ -1,0 +1,46 @@
+# Split Localhost Mode - Example Flags
+#
+# Format:
+#   - flag_name:
+#       treatment: "value"           # Required: Treatment (must be a string)
+#       keys: "key1,key2"            # Optional: Comma-separated targeting keys
+#       config: '{"key": "value"}'   # Optional: Dynamic Configuration (JSON)
+#
+# Documentation: https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/go-sdk#yaml
+
+- new_feature:
+    treatment: "on"
+    config: '{"rollout_percentage": 100, "description": "New feature enabled"}'
+
+- ui_theme:
+    treatment: "dark"
+
+- premium_features:
+    treatment: "on"
+    config: '{"analytics": true, "ai_assistant": true, "priority_support": true}'
+
+- max_retries:
+    treatment: "5"
+
+- discount_rate:
+    treatment: "0.15"
+
+- beta_rollout:
+    treatment: "off"
+    keys: "beta-tester-001"  # Only specific beta testers
+
+- onboarding_flow:
+    treatment: "v2"
+    config: '{"steps": ["welcome", "profile", "preferences", "done"], "skip_allowed": true}'
+
+- rate_limit:
+    treatment: "100"
+    config: '{"per_minute": 100, "burst": 150}'
+
+- experimental_algorithm:
+    treatment: "control"
+    # Default to control group (no treatment)
+
+- maintenance_mode:
+    treatment: "off"
+    # System-wide maintenance flag
