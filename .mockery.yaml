@@ -1,0 +1,14 @@
+# Mockery v3.6.4 configuration
+# See: https://github.com/vektra/mockery/blob/v3/docs/configuration.md
+all: false
+template: testify
+formatter: goimports
+packages:
+  github.com/splitio/split-openfeature-provider-go/v2:
+    interfaces:
+      Client:
+        config:
+          dir: "{{.InterfaceDir}}"
+          filename: "mock_client_test.go"
+          pkgname: "split"
+          structname: "MockClient"

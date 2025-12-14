@@ -1,0 +1,139 @@
+# golangci-lint configuration for Split OpenFeature Provider
+# Gold Standard Linting Configuration
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Enabled by default
+    - errcheck      # Check for unchecked errors
+    - govet         # Go vet
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Static analysis
+    - unused        # Check for unused code
+
+    # Additional recommended linters
+    - misspell      # Check for misspelled words
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Report unused function parameters
+    - prealloc      # Find slice declarations that could be preallocated
+    - goconst       # Find repeated strings that could be constants
+    - gocyclo       # Cyclomatic complexity
+    - gocognit      # Cognitive complexity
+    - dupl          # Code clone detection
+    - gocritic      # Comprehensive checks
+    - revive        # Fast, extensible linter
+    - gosec         # Security checks
+    - bodyclose     # Check HTTP response bodies are closed
+    - noctx         # Detect http.Request without context.Context
+    - rowserrcheck  # Check sql.Rows.Err is checked
+    - sqlclosecheck # Check sql.Rows and sql.Stmt are closed
+    - errorlint     # Error wrapping checks
+    - exhaustive    # Check exhaustiveness of enum switch statements
+
+  exclusions:
+    paths:
+      - examples
+      - test
+      - '.*\.pb\.go$'
+
+    rules:
+      # Exclude all linters from test files - focus on production code quality
+      - path: '(.+)_test\.go'
+        linters:
+          - errcheck
+          - gocyclo
+          - gocognit
+          - dupl
+          - gocritic
+          - gosec
+          - goconst
+          - govet
+          - revive
+          - staticcheck
+          - misspell
+          - unconvert
+          - unparam
+          - prealloc
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow  # Too many false positives
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 30
+
+    dupl:
+      threshold: 100
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    misspell:
+      locale: US
+
+    staticcheck:
+      checks: [ "all" ]
+
+    revive:
+      confidence: 0.8
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gosec:
+      severity: medium
+      confidence: medium
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - commentedOutCode
+        - whyNoLint
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false

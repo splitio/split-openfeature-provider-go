@@ -1,0 +1,87 @@
+# Split OpenFeature Provider - Cloud Test Flags
+#
+# This file documents the flags required for cloud mode integration testing.
+# Contributors can create these flags in their own Split.io account to run
+# cloud mode tests with SPLIT_API_KEY.
+#
+# Flag Set Setup (required for ObjectEvaluation tests):
+#   1. Create a flag set named "split_provider_test" in Split UI
+#   2. Add flags tagged with "split-provider-test-set" to the flag set:
+#      - ui_theme
+#      - api_version
+#
+# Expected Test Results:
+#   - Localhost mode: 73 tests
+#   - Cloud mode: 81 tests (includes flag set tests)
+
+flags:
+  # ============================================================
+  # Boolean Flags
+  # ============================================================
+
+  - name: feature_boolean_on
+    treatments: [ on, off ]
+    default: "on"
+
+  - name: feature_boolean_off
+    treatments: [ on, off ]
+    default: "off"
+
+  # ============================================================
+  # String Flags
+  # ============================================================
+
+  - name: ui_theme
+    treatments: [ dark, light ]
+    default: "dark"
+    flag_set: split_provider_test  # Add to flag set
+    config:
+      dark: '{"primary_color": "#1a1a2e", "secondary_color": "#16213e", "accent": "#0f3460"}'
+      light: '{"primary_color": "#ffffff", "secondary_color": "#f5f5f5", "accent": "#e8e8e8"}'
+    targeting:
+      - when: variant = "two"
+        serve: "light"
+
+  - name: api_version
+    treatments: [ v1, v2 ]
+    default: "v2"
+    flag_set: split_provider_test  # Add to flag set
+    targeting:
+      - when: variant = "two"
+        serve: "v1"
+
+  - name: homepage_variant
+    treatments: [ variant_a, variant_b ]
+    default: "variant_b"
+
+  # ============================================================
+  # Integer Flags
+  # ============================================================
+
+  - name: max_retries
+    treatments: [ "3", "5" ]
+    default: "5"
+
+  - name: page_size
+    treatments: [ "25", "50" ]
+    default: "50"
+
+  - name: timeout_seconds
+    treatments: [ "15", "30" ]
+    default: "30"
+
+  # ============================================================
+  # Float Flags
+  # ============================================================
+
+  - name: discount_rate
+    treatments: [ "0.10", "0.15" ]
+    default: "0.15"
+
+  - name: cache_hit_ratio
+    treatments: [ "0.75", "0.85" ]
+    default: "0.85"
+
+  - name: sampling_rate
+    treatments: [ "0.01", "0.05" ]
+    default: "0.01"
