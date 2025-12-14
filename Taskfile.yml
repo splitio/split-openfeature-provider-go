@@ -1,0 +1,335 @@
+version: '3'
+
+# Split OpenFeature Provider - Task Runner
+# Run 'task' or 'task help' for usage information
+
+# =============================================================================
+# Global Configuration
+# =============================================================================
+
+output: prefixed
+method: checksum
+silent: true
+dotenv: ['local.env']
+
+# =============================================================================
+# Variables
+# =============================================================================
+
+vars:
+  COVERAGE_FILE: coverage.out
+  COVERAGE_THRESHOLD: 70
+  LINT_TIMEOUT: 5m
+
+# =============================================================================
+# Default & Help
+# =============================================================================
+
+tasks:
+  default:
+    desc: Show available tasks
+    aliases: [list, ls]
+    cmds:
+      - task --list
+
+  help:
+    desc: Show help and common workflows
+    aliases: [h, '?']
+    cmds:
+      - |
+        echo "Split OpenFeature Provider - Task Runner"
+        echo "========================================"
+        echo ""
+        echo "Quick Start:"
+        echo "  task install-tools    Install development tools"
+        echo "  task test             Run tests"
+        echo ""
+        echo "Development Workflow:"
+        echo "  task check            Run all quality checks (lint + test + coverage)"
+        echo "  task pre-commit       Quick checks before committing"
+        echo "  task ci               Full CI checks before PR"
+        echo ""
+        echo "Code Quality:"
+        echo "  task lint             Run linter"
+        echo "  task lint-fix         Run linter with auto-fix"
+        echo "  task fmt              Format code"
+        echo "  task vet              Run go vet"
+        echo ""
+        echo "Testing:"
+        echo "  task test             Run unit tests with coverage"
+        echo "  task test-short       Run unit tests (fast mode)"
+        echo "  task coverage         Show coverage report"
+        echo "  task coverage-check   Verify coverage >= {{.COVERAGE_THRESHOLD}}%"
+        echo ""
+        echo "Examples:"
+        echo "  task example-localhost   Offline mode with YAML (no account)"
+        echo "  task example-cloud       Cloud mode (requires SPLIT_API_KEY)"
+        echo ""
+        echo "Integration Testing:"
+        echo "  task test-integration    Auto-selects localhost or cloud mode"
+        echo "  task test-cloud          Cloud-only features"
+        echo ""
+        echo "Run 'task --list' to see all available tasks"
+
+  # ===========================================================================
+  # Workflow Tasks
+  # ===========================================================================
+
+  check:
+    desc: Run all quality checks (lint, test, coverage)
+    aliases: [c]
+    cmds:
+      - task: lint
+      - task: test
+      - task: coverage-check
+
+  ci:
+    desc: Run full CI pipeline (use before submitting PR)
+    cmds:
+      - echo "Running CI checks..."
+      - task: fmt-check
+      - task: lint
+      - task: vet
+      - task: test
+      - task: coverage-check
+      - echo "All CI checks passed!"
+
+  pre-commit:
+    desc: Run pre-commit checks (format, lint, quick test)
+    aliases: [pc]
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test-short
+
+  pre-push:
+    desc: Run pre-push checks (full CI)
+    aliases: [pp]
+    cmds:
+      - task: ci
+
+  # ===========================================================================
+  # Build Tasks
+  # ===========================================================================
+
+  build:
+    desc: Build the provider
+    aliases: [b]
+    sources:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+    cmds:
+      - go build -v ./...
+
+  clean:
+    desc: Clean build artifacts and caches
+    cmds:
+      - rm -f {{.COVERAGE_FILE}}
+      - rm -rf .task/
+      - go clean -cache -testcache
+
+  # ===========================================================================
+  # Testing Tasks
+  # ===========================================================================
+
+  test:
+    desc: Run unit tests with race detector and coverage
+    aliases: [t]
+    sources:
+      - '**/*.go'
+      - go.mod
+    generates:
+      - '{{.COVERAGE_FILE}}'
+    cmds:
+      - go test -v -race -coverprofile={{.COVERAGE_FILE}} -covermode=atomic $(go list ./... | grep -v /examples/ | grep -v /test/)
+      - task: _update-coverage-badge
+
+  test-short:
+    desc: Run unit tests in short mode (fast)
+    aliases: [ts]
+    cmds:
+      - go test -v -short $(go list ./... | grep -v /examples/ | grep -v /test/)
+
+  # ===========================================================================
+  # Coverage Tasks
+  # ===========================================================================
+
+  coverage:
+    desc: Generate and display coverage report
+    aliases: [cov]
+    deps: [test]
+    cmds:
+      - go tool cover -func={{.COVERAGE_FILE}}
+
+  coverage-check:
+    desc: Verify coverage meets {{.COVERAGE_THRESHOLD}}% threshold
+    aliases: [cc]
+    deps: [test]
+    cmds:
+      - |
+        COVERAGE=$(go tool cover -func={{.COVERAGE_FILE}} | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Coverage: $COVERAGE% (threshold: {{.COVERAGE_THRESHOLD}}%)"
+        if [ $(echo "$COVERAGE < {{.COVERAGE_THRESHOLD}}" | bc) -eq 1 ]; then
+          echo "FAIL: Coverage is below threshold"
+          exit 1
+        fi
+        echo "PASS: Coverage meets threshold"
+
+  coverage-html:
+    desc: Open coverage report in browser
+    deps: [test]
+    cmds:
+      - go tool cover -html={{.COVERAGE_FILE}}
+
+  # ===========================================================================
+  # Code Quality Tasks
+  # ===========================================================================
+
+  lint:
+    desc: Run golangci-lint
+    aliases: [l]
+    sources:
+      - '**/*.go'
+      - .golangci.yml
+    cmds:
+      - golangci-lint run --timeout {{.LINT_TIMEOUT}}
+
+  lint-fix:
+    desc: Run golangci-lint with auto-fix
+    aliases: [lf]
+    cmds:
+      - golangci-lint run --fix --timeout {{.LINT_TIMEOUT}}
+
+  fmt:
+    desc: Format code with gofmt
+    aliases: [f]
+    cmds:
+      - gofmt -s -w .
+
+  fmt-check:
+    desc: Check code formatting (no changes)
+    aliases: [fc]
+    cmds:
+      - |
+        UNFORMATTED=$(gofmt -l .)
+        if [ -n "$UNFORMATTED" ]; then
+          echo "Unformatted files:"
+          echo "$UNFORMATTED"
+          exit 1
+        fi
+        echo "All files formatted correctly"
+
+  vet:
+    desc: Run go vet
+    aliases: [v]
+    sources:
+      - '**/*.go'
+    cmds:
+      - go vet ./...
+
+  # ===========================================================================
+  # Example Tasks
+  # ===========================================================================
+
+  example-localhost:
+    desc: Run localhost example (offline YAML flags, no account needed)
+    aliases: [el]
+    dir: examples/localhost
+    cmds:
+      - go run main.go
+
+  example-cloud:
+    desc: Run cloud example (requires SPLIT_API_KEY in local.env)
+    aliases: [ec]
+    dir: examples/cloud
+    preconditions:
+      - sh: test -n "$SPLIT_API_KEY"
+        msg: "SPLIT_API_KEY not set. Create local.env with SPLIT_API_KEY=your-key"
+    cmds:
+      - go run main.go
+
+  # ===========================================================================
+  # Integration Testing Tasks
+  # ===========================================================================
+
+  test-integration:
+    desc: Run integration tests (auto-selects localhost or cloud mode)
+    aliases: [ti]
+    dir: test/integration
+    cmds:
+      - go run .
+
+  test-cloud:
+    desc: Run cloud-only integration tests (requires SPLIT_API_KEY)
+    aliases: [tc]
+    dir: test/advanced
+    preconditions:
+      - sh: test -n "$SPLIT_API_KEY"
+        msg: "SPLIT_API_KEY not set. Create local.env with SPLIT_API_KEY=your-key"
+    cmds:
+      - go run main.go
+
+  # ===========================================================================
+  # Dependency Management Tasks
+  # ===========================================================================
+
+  deps-tidy:
+    desc: Tidy go.mod and go.sum
+    aliases: [tidy]
+    cmds:
+      - go mod tidy
+
+  deps-update:
+    desc: Update all dependencies to latest versions
+    aliases: [update]
+    cmds:
+      - echo "Updating dependencies..."
+      - go get -u ./...
+      - go mod tidy
+      - echo "Done. Run 'task test' to verify."
+
+  # ===========================================================================
+  # Tool Management Tasks
+  # ===========================================================================
+
+  install-tools:
+    desc: Install required development tools
+    aliases: [tools]
+    cmds:
+      - echo "Installing development tools..."
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - echo "Done!"
+
+  check-tools:
+    desc: Verify required tools are installed
+    cmds:
+      - |
+        echo "Checking tools..."
+        MISSING=""
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "[x] golangci-lint - not installed"
+          MISSING="yes"
+        else
+          echo "[ok] golangci-lint"
+        fi
+        if [ -n "$MISSING" ]; then
+          echo ""
+          echo "Run 'task install-tools' to install missing tools"
+          exit 1
+        fi
+        echo ""
+        echo "All tools installed!"
+
+  # ===========================================================================
+  # Internal Tasks
+  # ===========================================================================
+
+  _update-coverage-badge:
+    internal: true
+    cmds:
+      - |
+        COVERAGE=$(go tool cover -func={{.COVERAGE_FILE}} | grep total | awk '{print $3}' | sed 's/%//')
+        sed -i.bak "s/coverage-[0-9.]*%25/coverage-$COVERAGE%25/g" README.md
+        rm -f README.md.bak
+        echo "Coverage badge updated to $COVERAGE%"

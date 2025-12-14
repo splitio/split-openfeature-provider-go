@@ -1,17 +1,102 @@
-# Binaries for programs and plugins
+# =============================================================================
+# Go
+# =============================================================================
+
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Test binaries
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Coverage output
 *.out
+coverage.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Go workspace
+go.work
+go.work.sum
 
-.idea/
+# =============================================================================
+# Project
+# =============================================================================
+
+# Environment files (may contain secrets)
+*.env
+local.env
+
+# Task runner cache
+.task/
+
+# Split SDK local files
+.split
+.splits
+
+# =============================================================================
+# IDE - JetBrains (GoLand, IntelliJ)
+# =============================================================================
+
+.idea/*
+!.idea/codeStyles/
+!.idea/runConfigurations/
+
+*.iml
+*.ipr
+*.iws
+
+# =============================================================================
+# IDE - VS Code
+# =============================================================================
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+.history/
+*.vsix
+
+# =============================================================================
+# OS - macOS
+# =============================================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# =============================================================================
+# OS - Windows
+# =============================================================================
+
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# =============================================================================
+# OS - Linux
+# =============================================================================
+
+*~
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# Git
+# =============================================================================
+
+*.orig
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*

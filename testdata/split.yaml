@@ -1,0 +1,37 @@
+# Split Localhost Mode - Unit Test Data
+#
+# Format:
+#   - flag_name:
+#       treatment: "value"           # Required: Treatment (must be a string)
+#       keys: "key1,key2"            # Optional: Comma-separated targeting keys
+#       config: '{"key": "value"}'   # Optional: Dynamic Configuration (JSON)
+#
+# Documentation: https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/go-sdk#yaml
+
+- my_feature:
+    treatment: "on"
+    keys: "key"
+    config: '{"desc": "this applies only to ON treatment"}'
+
+- my_feature:
+    treatment: "off"
+
+- some_other_feature:
+    treatment: "off"
+
+- int_feature:
+    treatment: "32"
+
+- obj_feature:
+    treatment: "on"
+    config: '{"key": "value"}'
+
+- float_feature:
+    treatment: "32.5"
+
+- unparseable_feature:
+    treatment: "not-a-valid-type"
+
+- malformed_json_feature:
+    treatment: "on"
+    config: '{invalid json: missing quotes}'
