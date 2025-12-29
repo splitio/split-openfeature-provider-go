@@ -1,232 +1,239 @@
-package split_openfeature_provider_go
+package split
 
 import (
-	"context"
-	"encoding/json"
-	"github.com/splitio/go-client/splitio/conf"
-	"strconv"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
 
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
+	of "github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
+	"golang.org/x/sync/singleflight"
 )
 
-type SplitProvider struct {
-	client client.SplitClient
+// Provider implements the OpenFeature FeatureProvider interface for Split.io.
+//
+// # Goroutine Management and Lifecycle
+//
+// This provider spawns and manages goroutines with the following guarantees:
+//
+// 1. **Background Monitoring Goroutine** (monitorSplitUpdates in events.go)
+//   - Spawned: During InitWithContext after SDK is ready
+//   - Purpose: Monitors Split SDK for configuration changes
+//   - Shutdown: Gracefully terminated via close(stopMonitor) in ShutdownWithContext
+//   - Guarantee: Always terminates within monitoring interval (30s) after stopMonitor closed
+//   - Tracking: monitorDone channel closed when goroutine exits (see defer in monitorSplitUpdates)
+//   - Safety: Panic recovery ensures monitorDone always closed
+//
+// 2. **Initialization Goroutine** (BlockUntilReady wrapper in InitWithContext)
+//   - Spawned: During InitWithContext to monitor SDK initialization
+//   - Purpose: Wraps SDK's BlockUntilReady to allow context cancellation
+//   - Termination: Always terminates when BlockUntilReady completes (max: BlockUntilReady timeout)
+//   - Tracking: Tracked via sync.WaitGroup (initWg) - Add(1) before spawn, Done() on completion
+//   - Cleanup: ShutdownWithContext blocks on initWg.Wait() before destroying client
+//   - Guarantee: GUARANTEED no leak - Shutdown cannot complete until all init goroutines terminate
+//   - Lifecycle: Short-lived, terminates within BlockUntilReady timeout (default 10s)
+//
+// 3. **Shutdown Goroutine** (client.Destroy wrapper in ShutdownWithContext)
+//   - Spawned: During ShutdownWithContext to destroy Split SDK client
+//   - Purpose: Wraps SDK's Destroy() to allow context timeout
+//   - Termination: Terminates when client.Destroy() completes
+//   - Known Issue: In streaming mode, Destroy() can block up to 1 hour (Split SDK SSE issue)
+//   - Guarantee: Eventually terminates, but may outlive ShutdownWithContext's context timeout
+//   - Impact: Acceptable - goroutine performs cleanup and terminates, doesn't affect functionality
+//
+// All goroutines are properly tracked and either terminate gracefully or have documented
+// termination guarantees. No unbounded goroutine leaks exist in normal operation.
+type Provider struct {
+	// Pointer fields (8 bytes each on 64-bit)
+	client      *client.SplitClient
+	factory     *client.SplitFactory
+	splitConfig *conf.SplitSdkConfig
+	logger      *slog.Logger
+
+	// Channel fields (pointer-sized)
+	eventStream chan of.Event
+	stopMonitor chan struct{}
+	monitorDone chan struct{}
+
+	// Large struct fields
+	initGroup singleflight.Group
+	mtx       sync.RWMutex
+	initWg    sync.WaitGroup // Tracks initialization goroutines
+	initMu    sync.Mutex     // Serializes Init/Shutdown lifecycle transitions to prevent initWg race
+
+	// Smaller fields
+	monitoringInterval time.Duration
+	shutdown           uint32
 }
 
-func NewProvider(splitClient client.SplitClient) (*SplitProvider, error) {
-	return &SplitProvider{
-		client: splitClient,
-	}, nil
+// Config holds provider configuration.
+type Config struct {
+	// SplitConfig is the Split SDK configuration.
+	// If nil, conf.Default() is used.
+	SplitConfig *conf.SplitSdkConfig
+
+	// Logger is the slog.Logger used for provider and Split SDK logs.
+	// If nil, slog.Default() is used.
+	Logger *slog.Logger
+
+	// APIKey is the Split SDK key or "localhost" for local mode.
+	APIKey string
+
+	// MonitoringInterval is how often the provider checks for split definition changes.
+	// Default: 30 seconds. Minimum: 5 seconds.
+	// Lower values increase responsiveness but also CPU usage.
+	MonitoringInterval time.Duration
 }
 
-func NewProviderSimple(apiKey string) (*SplitProvider, error) {
-	cfg := conf.Default()
-	factory, err := client.NewSplitFactory(apiKey, cfg)
-	if err != nil {
-		return nil, err
+// Option configures a provider Config.
+type Option interface {
+	apply(*Config)
+}
+
+// WithSplitConfig sets the Split SDK configuration.
+func WithSplitConfig(cfg *conf.SplitSdkConfig) Option {
+	return withSplitConfig{cfg}
+}
+
+type withSplitConfig struct {
+	cfg *conf.SplitSdkConfig
+}
+
+func (o withSplitConfig) apply(c *Config) {
+	c.SplitConfig = o.cfg
+}
+
+// WithLogger sets the logger for provider and Split SDK logs.
+// This ensures unified logging across the provider, Split SDK, and OpenFeature SDK
+// when the same logger is also passed to hooks.NewLoggingHook().
+func WithLogger(logger *slog.Logger) Option {
+	return withLogger{logger}
+}
+
+type withLogger struct {
+	logger *slog.Logger
+}
+
+func (o withLogger) apply(c *Config) {
+	c.Logger = o.logger
+}
+
+// WithMonitoringInterval sets how often the provider checks for split definition changes.
+// Default: 30 seconds. Minimum: 5 seconds. Values below minimum are clamped.
+func WithMonitoringInterval(interval time.Duration) Option {
+	return withMonitoringInterval{interval}
+}
+
+type withMonitoringInterval struct {
+	interval time.Duration
+}
+
+func (o withMonitoringInterval) apply(c *Config) {
+	c.MonitoringInterval = o.interval
+}
+
+// New creates a Split provider with the given configuration.
+//
+// The apiKey parameter is required. Additional configuration can be provided
+// via functional options.
+//
+// Example with defaults:
+//
+//	provider, _ := split.New("YOUR_SDK_KEY")
+//
+// Example with custom logger:
+//
+//	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+//	provider, _ := split.New("YOUR_SDK_KEY", split.WithLogger(logger))
+//
+// Example with custom Split SDK config:
+//
+//	cfg := conf.Default()
+//	cfg.OperationMode = "localhost"
+//	provider, _ := split.New("localhost", split.WithSplitConfig(cfg))
+//
+// Example with unified logging (provider, Split SDK, and OpenFeature SDK):
+//
+//	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+//	slog.SetDefault(logger)
+//	provider, _ := split.New("YOUR_SDK_KEY", split.WithLogger(logger))
+//	openfeature.AddHooks(hooks.NewLoggingHook(false, logger))
+//
+// The provider is created in NotReady state. Call Init() (or use OpenFeature's
+// SetProviderAndWait) to wait for the SDK to download splits. Always call Shutdown()
+// when done to clean up resources.
+func New(apiKey string, opts ...Option) (*Provider, error) {
+	cfg := &Config{
+		APIKey:      apiKey,
+		SplitConfig: nil,
+		Logger:      nil,
 	}
-	splitClient := factory.Client()
-	err = splitClient.BlockUntilReady(10)
-	if err != nil {
-		return nil, err
+
+	for _, opt := range opts {
+		opt.apply(cfg)
 	}
-	return NewProvider(*splitClient)
+
+	if cfg.SplitConfig == nil {
+		cfg.SplitConfig = conf.Default()
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+
+	if cfg.SplitConfig.BlockUntilReady <= 0 {
+		cfg.SplitConfig.BlockUntilReady = defaultSDKTimeout
+	}
+
+	providerLogger := cfg.Logger.With("source", "split-provider")
+
+	// Apply monitoring interval defaults and minimum
+	monitoringInterval := cfg.MonitoringInterval
+	if monitoringInterval == 0 {
+		monitoringInterval = defaultMonitoringInterval
+	} else if monitoringInterval < minMonitoringInterval {
+		providerLogger.Warn("monitoring interval below minimum, using minimum",
+			"requested", monitoringInterval,
+			"minimum", minMonitoringInterval)
+		monitoringInterval = minMonitoringInterval
+	}
+
+	if cfg.SplitConfig.Logger == nil {
+		splitSDKLogger := cfg.Logger.With("source", "split-sdk")
+		cfg.SplitConfig.Logger = NewSplitLogger(splitSDKLogger)
+	}
+
+	factory, err := client.NewSplitFactory(cfg.APIKey, cfg.SplitConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Split factory: %w", err)
+	}
+
+	provider := &Provider{
+		client:             factory.Client(),
+		factory:            factory,
+		eventStream:        make(chan of.Event, eventChannelBuffer),
+		stopMonitor:        make(chan struct{}),
+		monitorDone:        make(chan struct{}),
+		splitConfig:        cfg.SplitConfig,
+		monitoringInterval: monitoringInterval,
+		logger:             providerLogger,
+	}
+
+	mode := "cloud"
+	if provider.isLocalhostMode() {
+		mode = "localhost"
+	}
+	providerLogger.Info("Split provider created",
+		"mode", mode,
+		"block_until_ready", cfg.SplitConfig.BlockUntilReady)
+
+	return provider, nil
 }
 
-func (provider *SplitProvider) Metadata() openfeature.Metadata {
-	return openfeature.Metadata{
+// Metadata returns provider metadata with name "Split".
+func (p *Provider) Metadata() of.Metadata {
+	return of.Metadata{
 		Name: "Split",
-	}
-}
-
-func (provider *SplitProvider) BooleanEvaluation(ctx context.Context, flag string, defaultValue bool, evalCtx openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
-	if noTargetingKey(evalCtx) {
-		return openfeature.BoolResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
-		}
-	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
-		return openfeature.BoolResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
-		}
-	}
-	var value bool
-	if evaluated == "true" || evaluated == "on" {
-		value = true
-	} else if evaluated == "false" || evaluated == "off" {
-		value = false
-	} else {
-		return openfeature.BoolResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailParseError(evaluated),
-		}
-	}
-	return openfeature.BoolResolutionDetail{
-		Value:                    value,
-		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
-	}
-}
-
-func (provider *SplitProvider) StringEvaluation(ctx context.Context, flag string, defaultValue string, evalCtx openfeature.FlattenedContext) openfeature.StringResolutionDetail {
-	if noTargetingKey(evalCtx) {
-		return openfeature.StringResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
-		}
-	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
-		return openfeature.StringResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
-		}
-	}
-	return openfeature.StringResolutionDetail{
-		Value:                    evaluated,
-		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
-	}
-}
-
-func (provider *SplitProvider) FloatEvaluation(ctx context.Context, flag string, defaultValue float64, evalCtx openfeature.FlattenedContext) openfeature.FloatResolutionDetail {
-	if noTargetingKey(evalCtx) {
-		return openfeature.FloatResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
-		}
-	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
-		return openfeature.FloatResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
-		}
-	}
-	floatEvaluated, parseErr := strconv.ParseFloat(evaluated, 64)
-	if parseErr != nil {
-		return openfeature.FloatResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailParseError(evaluated),
-		}
-	}
-	return openfeature.FloatResolutionDetail{
-		Value:                    floatEvaluated,
-		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
-	}
-}
-
-func (provider *SplitProvider) IntEvaluation(ctx context.Context, flag string, defaultValue int64, evalCtx openfeature.FlattenedContext) openfeature.IntResolutionDetail {
-	if noTargetingKey(evalCtx) {
-		return openfeature.IntResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
-		}
-	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
-		return openfeature.IntResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
-		}
-	}
-	intEvaluated, parseErr := strconv.ParseInt(evaluated, 10, 64)
-	if parseErr != nil {
-		return openfeature.IntResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailParseError(evaluated),
-		}
-	}
-	return openfeature.IntResolutionDetail{
-		Value:                    intEvaluated,
-		ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
-	}
-}
-
-func (provider *SplitProvider) ObjectEvaluation(ctx context.Context, flag string, defaultValue interface{}, evalCtx openfeature.FlattenedContext) openfeature.InterfaceResolutionDetail {
-	if noTargetingKey(evalCtx) {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailTargetingKeyMissing(),
-		}
-	}
-	evaluated := provider.evaluateTreatment(flag, evalCtx)
-	if noTreatment(evaluated) {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailNotFound(evaluated),
-		}
-	}
-	var data map[string]interface{}
-	parseErr := json.Unmarshal([]byte(evaluated), &data)
-	if parseErr != nil {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    defaultValue,
-			ProviderResolutionDetail: resolutionDetailParseError(evaluated),
-		}
-	} else {
-		return openfeature.InterfaceResolutionDetail{
-			Value:                    data,
-			ProviderResolutionDetail: resolutionDetailTargetingMatch(evaluated),
-		}
-	}
-
-}
-
-func (provider *SplitProvider) Hooks() []openfeature.Hook {
-	return []openfeature.Hook{}
-}
-
-// *** Helpers ***
-
-func (provider *SplitProvider) evaluateTreatment(flag string, evalContext openfeature.FlattenedContext) string {
-	return provider.client.Treatment(evalContext[openfeature.TargetingKey], flag, nil)
-}
-
-func noTargetingKey(evalContext openfeature.FlattenedContext) bool {
-	_, ok := evalContext[openfeature.TargetingKey]
-	return !ok
-}
-
-func noTreatment(treatment string) bool {
-	return treatment == "" || treatment == "control"
-}
-
-func resolutionDetailNotFound(variant string) openfeature.ProviderResolutionDetail {
-	return providerResolutionDetailError(
-		openfeature.NewFlagNotFoundResolutionError(
-			"Flag not found."),
-		openfeature.DefaultReason,
-		variant)
-}
-
-func resolutionDetailParseError(variant string) openfeature.ProviderResolutionDetail {
-	return providerResolutionDetailError(
-		openfeature.NewParseErrorResolutionError("Error parsing the treatment to the given type."),
-		openfeature.ErrorReason,
-		variant)
-}
-
-func resolutionDetailTargetingKeyMissing() openfeature.ProviderResolutionDetail {
-	return providerResolutionDetailError(
-		openfeature.NewTargetingKeyMissingResolutionError("Targeting key is required and missing."),
-		openfeature.ErrorReason,
-		"")
-}
-
-func providerResolutionDetailError(error openfeature.ResolutionError, reason openfeature.Reason, variant string) openfeature.ProviderResolutionDetail {
-	return openfeature.ProviderResolutionDetail{
-		ResolutionError: error,
-		Reason:          reason,
-		Variant:         variant,
-	}
-}
-
-func resolutionDetailTargetingMatch(variant string) openfeature.ProviderResolutionDetail {
-	return openfeature.ProviderResolutionDetail{
-		Reason:  openfeature.TargetingMatchReason,
-		Variant: variant,
 	}
 }
