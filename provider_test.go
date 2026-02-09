@@ -1,13 +1,14 @@
 package split_openfeature_provider_go
 
 import (
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
-	"github.com/splitio/go-client/splitio/conf"
-	"github.com/splitio/go-toolkit/logging"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
+	"github.com/splitio/go-toolkit/logging"
 )
 
 func create(t *testing.T) *openfeature.Client {
@@ -55,7 +56,7 @@ func TestUseDefault(t *testing.T) {
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(t.Context(), flagName, false, evalCtx)
 	if err == nil {
 		t.Error("Should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
@@ -63,7 +64,7 @@ func TestUseDefault(t *testing.T) {
 	} else if result == true {
 		t.Error("Result was true, but should have been default value of false")
 	}
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	result, err = ofClient.BooleanValue(t.Context(), flagName, true, evalCtx)
 	if err == nil {
 		t.Error("Should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
@@ -77,7 +78,7 @@ func TestMissingTargetingKey(t *testing.T) {
 	ofClient := create(t)
 	flagName := "random-non-existent-feature"
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, openfeature.EvaluationContext{})
+	result, err := ofClient.BooleanValue(t.Context(), flagName, false, openfeature.EvaluationContext{})
 	if err == nil {
 		t.Error("Should have returned targeting key missing error")
 	} else if !strings.Contains(err.Error(), string(openfeature.TargetingKeyMissingCode)) {
@@ -92,7 +93,7 @@ func TestGetControlVariantNonExistentSplit(t *testing.T) {
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValueDetails(t.Context(), flagName, false, evalCtx)
 	if err == nil {
 		t.Error("Should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
@@ -109,7 +110,7 @@ func TestGetBooleanSplit(t *testing.T) {
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	result, err := ofClient.BooleanValue(t.Context(), flagName, true, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result == true {
@@ -122,7 +123,7 @@ func TestGetBooleanWithKeySplit(t *testing.T) {
 	flagName := "my_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(t.Context(), flagName, false, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result == false {
@@ -130,7 +131,7 @@ func TestGetBooleanWithKeySplit(t *testing.T) {
 	}
 
 	evalCtx = openfeature.NewEvaluationContext("randomKey", nil)
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	result, err = ofClient.BooleanValue(t.Context(), flagName, true, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result == true {
@@ -143,7 +144,7 @@ func TestGetStringSplit(t *testing.T) {
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.StringValue(nil, flagName, "on", evalCtx)
+	result, err := ofClient.StringValue(t.Context(), flagName, "on", evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result != "off" {
@@ -156,7 +157,7 @@ func TestGetIntegerSplit(t *testing.T) {
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.IntValue(nil, flagName, 0, evalCtx)
+	result, err := ofClient.IntValue(t.Context(), flagName, 0, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result != 32 {
@@ -169,9 +170,9 @@ func TestGetObjectSplit(t *testing.T) {
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.ObjectValue(nil, flagName, 0, evalCtx)
+	result, err := ofClient.ObjectValue(t.Context(), flagName, 0, evalCtx)
 	expectedResult := map[string]interface{}{
-		"key": "value",
+		"desc": "this applies only to my_variant treatment",
 	}
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
@@ -185,7 +186,7 @@ func TestGetFloatSplit(t *testing.T) {
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.FloatValue(nil, flagName, 0, evalCtx)
+	result, err := ofClient.FloatValue(t.Context(), flagName, 0, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result != float64(32) {
@@ -208,7 +209,7 @@ func TestBooleanDetails(t *testing.T) {
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValueDetails(nil, flagName, true, evalCtx)
+	result, err := ofClient.BooleanValueDetails(t.Context(), flagName, true, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result.FlagKey != flagName {
@@ -229,7 +230,7 @@ func TestIntegerDetails(t *testing.T) {
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.IntValueDetails(nil, flagName, 0, evalCtx)
+	result, err := ofClient.IntValueDetails(t.Context(), flagName, 0, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result.FlagKey != flagName {
@@ -250,7 +251,7 @@ func TestStringDetails(t *testing.T) {
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.StringValueDetails(nil, flagName, "blah", evalCtx)
+	result, err := ofClient.StringValueDetails(t.Context(), flagName, "blah", evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result.FlagKey != flagName {
@@ -271,9 +272,9 @@ func TestObjectDetails(t *testing.T) {
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.ObjectValueDetails(nil, flagName, map[string]interface{}{}, evalCtx)
+	result, err := ofClient.ObjectValueDetails(t.Context(), flagName, map[string]interface{}{}, evalCtx)
 	expectedResult := map[string]interface{}{
-		"key": "value",
+		"desc": "this applies only to my_variant treatment",
 	}
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
@@ -283,8 +284,8 @@ func TestObjectDetails(t *testing.T) {
 		t.Errorf("reason is %s, not targeting match", result.Reason)
 	} else if !reflect.DeepEqual(result.Value, expectedResult) {
 		t.Error("Result was not map of key->value as in split.yaml")
-	} else if result.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Variant should be {\"key\": \"value\"} as in split.yaml, but was %s", result.Variant)
+	} else if result.Variant != "my_variant" {
+		t.Errorf("Variant should be on as in split.yaml, but was %s", result.Variant)
 	} else if result.ErrorCode != "" {
 		t.Errorf("Unexpected error in result %s", result.ErrorCode)
 	}
@@ -295,7 +296,7 @@ func TestFloatDetails(t *testing.T) {
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
+	result, err := ofClient.FloatValueDetails(t.Context(), flagName, 0, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result.FlagKey != flagName {
@@ -311,7 +312,7 @@ func TestFloatDetails(t *testing.T) {
 	}
 
 	flagName = "float_feature"
-	result, err = ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
+	result, err = ofClient.FloatValueDetails(t.Context(), flagName, 0, evalCtx)
 	if err != nil {
 		t.Errorf("Unexpected error occurred %s", err.Error())
 	} else if result.Value != 32.5 {
@@ -329,18 +330,18 @@ func TestBooleanFail(t *testing.T) {
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(t.Context(), flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if result != false {
 		t.Error("Result was true, but should have been default of false")
 	}
 
-	resultDetails, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
+	resultDetails, err := ofClient.BooleanValueDetails(t.Context(), flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if resultDetails.Value != false {
@@ -349,7 +350,7 @@ func TestBooleanFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != openfeature.ErrorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+	} else if resultDetails.Variant != "my_variant" {
 		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
@@ -360,18 +361,18 @@ func TestIntegerFail(t *testing.T) {
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.IntValue(nil, flagName, 10, evalCtx)
+	result, err := ofClient.IntValue(t.Context(), flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if result != int64(10) {
 		t.Errorf("Result was %d, but should have been default of 10", result)
 	}
 
-	resultDetails, err := ofClient.IntValueDetails(nil, flagName, 10, evalCtx)
+	resultDetails, err := ofClient.IntValueDetails(t.Context(), flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if resultDetails.Value != int64(10) {
@@ -380,7 +381,7 @@ func TestIntegerFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != openfeature.ErrorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+	} else if resultDetails.Variant != "my_variant" {
 		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
@@ -391,18 +392,18 @@ func TestFloatFail(t *testing.T) {
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
 
-	result, err := ofClient.FloatValue(nil, flagName, 10, evalCtx)
+	result, err := ofClient.FloatValue(t.Context(), flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if result != float64(10) {
 		t.Errorf("Result was %f, but should have been default of 10", result)
 	}
 
-	resultDetails, err := ofClient.FloatValueDetails(nil, flagName, 10, evalCtx)
+	resultDetails, err := ofClient.FloatValueDetails(t.Context(), flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if resultDetails.Value != float64(10) {
@@ -411,7 +412,7 @@ func TestFloatFail(t *testing.T) {
 		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
 	} else if resultDetails.Reason != openfeature.ErrorReason {
 		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
+	} else if resultDetails.Variant != "my_variant" {
 		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
 	}
 }
@@ -425,18 +426,18 @@ func TestObjectFail(t *testing.T) {
 		"key": "value",
 	}
 
-	result, err := ofClient.ObjectValue(nil, flagName, defaultTreatment, evalCtx)
+	result, err := ofClient.ObjectValue(t.Context(), flagName, defaultTreatment, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if !reflect.DeepEqual(result, defaultTreatment) {
 		t.Error("Result was not default treatment")
 	}
 
-	resultDetails, err := ofClient.ObjectValueDetails(nil, flagName, defaultTreatment, evalCtx)
+	resultDetails, err := ofClient.ObjectValueDetails(t.Context(), flagName, defaultTreatment, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("Expected error to occur")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
 		t.Errorf("Expected parse error, got %s", err.Error())
 	} else if !reflect.DeepEqual(resultDetails.Value, defaultTreatment) {
