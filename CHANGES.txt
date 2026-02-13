@@ -3,9 +3,9 @@
     - Use openfeature.SetProviderAndWait.
     - Client methods take context.Context as first argument.
     - NewProvider accepts *client.SplitClient.
-    - NewProviderWithAPIKey and NewProviderSimple for API-key setup.
+    - NewProviderWithAPIKey for API-key setup.
 - Upgraded to OpenFeature Go SDK v1.17.x and Split Go Client v6.10.x.
-- Added FlagMetadata["config"] with Split treatment config on resolution details (aligned with Java/.NET/Python providers).
+- Added FlagMetadata["config"] with Split treatment config on resolution details.
 - Implemented Tracker: Track(ctx, eventName, evalCtx, details) forwards to Split SDK (requires targetingKey and trafficType in context).
 - Minimum Go version: 1.21.
 

@@ -42,16 +42,6 @@ func evaluationContext() openfeature.EvaluationContext {
 	return openfeature.NewEvaluationContext("key", map[string]any{})
 }
 
-// func TestNewProviderWithAPIKey(t *testing.T) {
-// 	provider, err := NewProviderWithAPIKey("localhost")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	if provider == nil {
-// 		t.Fatal("provider is nil")
-// 	}
-// }
-
 func TestUseDefault(t *testing.T) {
 	ofClient, _ := create(t)
 	flagName := "random-non-existent-feature"

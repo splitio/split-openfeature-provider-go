@@ -30,8 +30,8 @@ func NewProvider(splitClient *client.SplitClient) (*SplitProvider, error) {
 	return &SplitProvider{client: splitClient}, nil
 }
 
-// NewProviderSimple creates a SplitProvider using the given API key and default config.
-func NewProviderSimple(apiKey string) (*SplitProvider, error) {
+// NewProviderWithAPIKey creates a SplitProvider using the given API key and default config.
+func NewProviderWithAPIKey(apiKey string) (*SplitProvider, error) {
 	cfg := conf.Default()
 
 	factory, err := client.NewSplitFactory(apiKey, cfg)
