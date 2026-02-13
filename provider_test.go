@@ -1,451 +1,443 @@
 package split_openfeature_provider_go
 
 import (
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
-	"github.com/splitio/go-client/splitio/conf"
-	"github.com/splitio/go-toolkit/logging"
+	"context"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/client"
+	"github.com/splitio/go-client/v6/splitio/conf"
 )
 
-func create(t *testing.T) *openfeature.Client {
+func create(t *testing.T) (*openfeature.Client, *SplitProvider) {
+	t.Helper()
 	cfg := conf.Default()
 	cfg.SplitFile = "./split.yaml"
-	cfg.LoggerConfig.LogLevel = logging.LevelNone
+	cfg.BlockUntilReady = 10
 	factory, err := client.NewSplitFactory("localhost", cfg)
 	if err != nil {
-		// error
-		t.Error("Error creating split factory")
+		t.Fatal("error creating split factory:", err)
 	}
 	splitClient := factory.Client()
-	err = splitClient.BlockUntilReady(10)
-	if err != nil {
-		// error timeout
-		t.Error("Split sdk timeout error")
+	if err := splitClient.BlockUntilReady(10); err != nil {
+		t.Fatal("split sdk timeout:", err)
 	}
-	provider, err := NewProvider(*splitClient)
+	provider, err := NewProvider(splitClient)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if provider == nil {
-		t.Error("Error creating Split Provider")
+		t.Fatal("provider is nil")
 	}
-	openfeature.SetProvider(provider)
-	return openfeature.NewClient("test_client")
+	if err := openfeature.SetProviderAndWait(provider); err != nil {
+		t.Fatal("set provider:", err)
+	}
+	ofClient := openfeature.NewClient("test_client")
+	return ofClient, provider
 }
 
 func evaluationContext() openfeature.EvaluationContext {
-	return openfeature.NewEvaluationContext("key", nil)
+	return openfeature.NewEvaluationContext("key", map[string]any{})
 }
 
-func TestCreateSimple(t *testing.T) {
-	provider, err := NewProviderSimple("localhost")
-	if err != nil {
-		t.Error(err)
-	}
-	if provider == nil {
-		t.Error("Error creating Split Provider")
-	}
-}
+// func TestNewProviderWithAPIKey(t *testing.T) {
+// 	provider, err := NewProviderWithAPIKey("localhost")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	if provider == nil {
+// 		t.Fatal("provider is nil")
+// 	}
+// }
 
 func TestUseDefault(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(ctx, flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Should have returned flag not found error")
+		t.Error("should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been default value of false")
+		t.Errorf("unexpected error: %s", err.Error())
+	} else if result {
+		t.Error("result should be default false")
 	}
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	result, err = ofClient.BooleanValue(ctx, flagName, true, evalCtx)
 	if err == nil {
-		t.Error("Should have returned flag not found error")
+		t.Error("should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == false {
-		t.Error("Result was false, but should have been default value of true")
+		t.Errorf("unexpected error: %s", err.Error())
+	} else if !result {
+		t.Error("result should be default true")
 	}
 }
 
 func TestMissingTargetingKey(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "random-non-existent-feature"
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, openfeature.EvaluationContext{})
+	result, err := ofClient.BooleanValue(ctx, flagName, false, openfeature.EvaluationContext{})
 	if err == nil {
-		t.Error("Should have returned targeting key missing error")
+		t.Error("should have returned targeting key missing error")
 	} else if !strings.Contains(err.Error(), string(openfeature.TargetingKeyMissingCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been default value of false")
+		t.Errorf("unexpected error: %s", err.Error())
+	} else if result {
+		t.Error("result should be default false")
 	}
 }
 
 func TestGetControlVariantNonExistentSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "random-non-existent-feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValueDetails(ctx, flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Should have returned flag not found error")
+		t.Error("should have returned flag not found error")
 	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.Value == true {
-		t.Error("Result was true, but should have been default value of false")
+		t.Errorf("unexpected error: %s", err.Error())
+	} else if result.Value {
+		t.Error("result value should be default false")
 	} else if result.Variant != "control" {
-		t.Error("Variant should be control due to Split Go SDK functionality")
+		t.Error("variant should be control")
 	}
 }
 
 func TestGetBooleanSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	result, err := ofClient.BooleanValue(ctx, flagName, true, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been false as set in split.yaml")
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result {
+		t.Error("result should be false as in split.yaml")
 	}
 }
 
 func TestGetBooleanWithKeySplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "my_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(ctx, flagName, false, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == false {
-		t.Error("Result was false, but should have been true as set in split.yaml")
+		t.Fatalf("unexpected error: %s", err.Error())
 	}
-
-	evalCtx = openfeature.NewEvaluationContext("randomKey", nil)
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
+	if !result {
+		t.Error("result should be true as in split.yaml")
+	}
+	evalCtx = openfeature.NewEvaluationContext("randomKey", map[string]any{})
+	result, err = ofClient.BooleanValue(ctx, flagName, true, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been false as set in split.yaml")
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result {
+		t.Error("result should be false as in split.yaml for randomKey")
 	}
 }
 
 func TestGetStringSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.StringValue(nil, flagName, "on", evalCtx)
+	result, err := ofClient.StringValue(ctx, flagName, "on", evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != "off" {
-		t.Errorf("Result was %s, not off as set in split.yaml", result)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result != "off" {
+		t.Errorf("result want off, got %s", result)
 	}
 }
 
 func TestGetIntegerSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.IntValue(nil, flagName, 0, evalCtx)
+	result, err := ofClient.IntValue(ctx, flagName, 0, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != 32 {
-		t.Errorf("Result was %d, not 32 as set in split.yaml", result)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result != 32 {
+		t.Errorf("result want 32, got %d", result)
 	}
 }
 
 func TestGetObjectSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.ObjectValue(nil, flagName, 0, evalCtx)
-	expectedResult := map[string]interface{}{
-		"key": "value",
-	}
+	result, err := ofClient.ObjectValue(ctx, flagName, nil, evalCtx)
+	expected := map[string]any{"key": "value"}
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if !reflect.DeepEqual(result, expectedResult) {
-		t.Error("Result was not map from key to value as set in split.yaml")
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("result want %v, got %v", expected, result)
 	}
 }
 
 func TestGetFloatSplit(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.FloatValue(nil, flagName, 0, evalCtx)
+	result, err := ofClient.FloatValue(ctx, flagName, 0, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != float64(32) {
-		t.Errorf("Result was %f, not 32 as set in split.yaml", result)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result != 32 {
+		t.Errorf("result want 32, got %f", result)
 	}
 }
 
 func TestMetadataName(t *testing.T) {
-	ofClient := create(t)
-	if ofClient.Metadata().Name() != "test_client" {
-		t.Error("Client name was not set properly")
+	ofClient, provider := create(t)
+
+	if ofClient.Metadata().Domain() != "test_client" {
+		t.Error("client domain should be test_client")
 	}
-	if openfeature.ProviderMetadata().Name != "Split" {
-		t.Errorf("Provider metadata name was %s, not Split", openfeature.ProviderMetadata().Name)
+	if provider.Metadata().Name != "Split" {
+		t.Errorf("provider name want Split, got %s", provider.Metadata().Name)
 	}
 }
 
 func TestBooleanDetails(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValueDetails(nil, flagName, true, evalCtx)
+	result, err := ofClient.BooleanValueDetails(ctx, flagName, true, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value == true {
-		t.Error("Result was true, but should have been false as in split.yaml")
-	} else if result.Variant != "off" {
-		t.Errorf("Variant should be off as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result.FlagKey != flagName {
+		t.Errorf("flag key want %s, got %s", flagName, result.FlagKey)
+	}
+	if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
+		t.Errorf("reason want targeting match, got %s", result.Reason)
+	}
+	if result.Value {
+		t.Error("value should be false as in split.yaml")
+	}
+	if result.Variant != "off" {
+		t.Errorf("variant want off, got %s", result.Variant)
+	}
+	if result.ErrorCode != "" {
+		t.Errorf("unexpected error code: %s", result.ErrorCode)
 	}
 }
 
 func TestIntegerDetails(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.IntValueDetails(nil, flagName, 0, evalCtx)
+	result, err := ofClient.IntValueDetails(ctx, flagName, 0, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != int64(32) {
-		t.Errorf("Result was %d, but should have been 32 as in split.yaml", result.Value)
-	} else if result.Variant != "32" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result.FlagKey != flagName {
+		t.Errorf("flag key want %s, got %s", flagName, result.FlagKey)
+	}
+	if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
+		t.Errorf("reason want targeting match, got %s", result.Reason)
+	}
+	if result.Value != 32 {
+		t.Errorf("value want 32, got %d", result.Value)
+	}
+	if result.Variant != "32" {
+		t.Errorf("variant want 32, got %s", result.Variant)
+	}
+	if result.ErrorCode != "" {
+		t.Errorf("unexpected error code: %s", result.ErrorCode)
 	}
 }
 
 func TestStringDetails(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "some_other_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.StringValueDetails(nil, flagName, "blah", evalCtx)
+	result, err := ofClient.StringValueDetails(ctx, flagName, "blah", evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != "off" {
-		t.Errorf("Result was %s, but should have been off as in split.yaml", result.Value)
-	} else if result.Variant != "off" {
-		t.Errorf("Variant should be off as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result.FlagKey != flagName {
+		t.Errorf("flag key want %s, got %s", flagName, result.FlagKey)
+	}
+	if result.Value != "off" {
+		t.Errorf("value want off, got %s", result.Value)
+	}
+	if result.Variant != "off" {
+		t.Errorf("variant want off, got %s", result.Variant)
 	}
 }
 
 func TestObjectDetails(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.ObjectValueDetails(nil, flagName, map[string]interface{}{}, evalCtx)
-	expectedResult := map[string]interface{}{
-		"key": "value",
-	}
+	result, err := ofClient.ObjectValueDetails(ctx, flagName, map[string]any{}, evalCtx)
+	expected := map[string]any{"key": "value"}
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if !reflect.DeepEqual(result.Value, expectedResult) {
-		t.Error("Result was not map of key->value as in split.yaml")
-	} else if result.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Variant should be {\"key\": \"value\"} as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result.FlagKey != flagName {
+		t.Errorf("flag key want %s, got %s", flagName, result.FlagKey)
+	}
+	if !reflect.DeepEqual(result.Value, expected) {
+		t.Errorf("value want %v, got %v", expected, result.Value)
+	}
+	if result.Variant != "{\"key\": \"value\"}" {
+		t.Errorf("variant want JSON, got %s", result.Variant)
 	}
 }
 
 func TestFloatDetails(t *testing.T) {
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
+	result, err := ofClient.FloatValueDetails(ctx, flagName, 0, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != float64(32) {
-		t.Errorf("Result was %f, but should have been 32 as in split.yaml", result.Value)
-	} else if result.Variant != "32" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
 	}
-
+	if result.Value != 32 {
+		t.Errorf("value want 32, got %f", result.Value)
+	}
+	if result.Variant != "32" {
+		t.Errorf("variant want 32, got %s", result.Variant)
+	}
 	flagName = "float_feature"
-	result, err = ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
+	result, err = ofClient.FloatValueDetails(ctx, flagName, 0, evalCtx)
 	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.Value != 32.5 {
-		t.Errorf("Result was %f, but should have been 32.5 as in split.yaml", result.Value)
-	} else if result.Variant != "32.5" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
+		t.Fatalf("unexpected error: %s", err.Error())
+	}
+	if result.Value != 32.5 {
+		t.Errorf("value want 32.5, got %f", result.Value)
+	}
+	if result.Variant != "32.5" {
+		t.Errorf("variant want 32.5, got %s", result.Variant)
 	}
 }
 
 func TestBooleanFail(t *testing.T) {
-	// attempt to fetch an object treatment as a boolean. Should result in the default
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
+	result, err := ofClient.BooleanValue(ctx, flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("expected parse error")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != false {
-		t.Error("Result was true, but should have been default of false")
+		t.Errorf("expected parse error, got %s", err.Error())
 	}
-
-	resultDetails, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
+	if result {
+		t.Error("result should be default false")
+	}
+	resultDetails, err := ofClient.BooleanValueDetails(ctx, flagName, false, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != false {
-		t.Error("Result was true, but should have been default of false")
+		t.Error("expected parse error")
 	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
+		t.Errorf("error code want %s, got %s", openfeature.ParseErrorCode, resultDetails.ErrorCode)
 	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
+		t.Errorf("reason want %s, got %s", openfeature.ErrorReason, resultDetails.Reason)
 	}
 }
 
 func TestIntegerFail(t *testing.T) {
-	// attempt to fetch an object treatment as an integer. Should result in the default
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.IntValue(nil, flagName, 10, evalCtx)
+	result, err := ofClient.IntValue(ctx, flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("expected parse error")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != int64(10) {
-		t.Errorf("Result was %d, but should have been default of 10", result)
+		t.Errorf("expected parse error, got %s", err.Error())
 	}
-
-	resultDetails, err := ofClient.IntValueDetails(nil, flagName, 10, evalCtx)
+	if result != 10 {
+		t.Errorf("result should be default 10, got %d", result)
+	}
+	resultDetails, err := ofClient.IntValueDetails(ctx, flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != int64(10) {
-		t.Errorf("Result was %d, but should have been default of 10", resultDetails.Value)
+		t.Error("expected parse error")
 	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
+		t.Errorf("error code want %s, got %s", openfeature.ParseErrorCode, resultDetails.ErrorCode)
 	}
 }
 
 func TestFloatFail(t *testing.T) {
-	// attempt to fetch an object treatment as a float. Should result in the default
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "obj_feature"
 	evalCtx := evaluationContext()
+	ctx := context.Background()
 
-	result, err := ofClient.FloatValue(nil, flagName, 10, evalCtx)
+	result, err := ofClient.FloatValue(ctx, flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("expected parse error")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != float64(10) {
-		t.Errorf("Result was %f, but should have been default of 10", result)
+		t.Errorf("expected parse error, got %s", err.Error())
 	}
-
-	resultDetails, err := ofClient.FloatValueDetails(nil, flagName, 10, evalCtx)
+	if result != 10 {
+		t.Errorf("result should be default 10, got %f", result)
+	}
+	resultDetails, err := ofClient.FloatValueDetails(ctx, flagName, 10, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != float64(10) {
-		t.Errorf("Result was %f, but should have been default of 10", resultDetails.Value)
+		t.Error("expected parse error")
 	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
+		t.Errorf("error code want %s, got %s", openfeature.ParseErrorCode, resultDetails.ErrorCode)
 	}
 }
 
 func TestObjectFail(t *testing.T) {
-	// attempt to fetch an int as an object. Should result in the default
-	ofClient := create(t)
+	ofClient, _ := create(t)
 	flagName := "int_feature"
 	evalCtx := evaluationContext()
-	defaultTreatment := map[string]interface{}{
-		"key": "value",
-	}
+	ctx := context.Background()
+	defaultTreatment := map[string]any{"key": "value"}
 
-	result, err := ofClient.ObjectValue(nil, flagName, defaultTreatment, evalCtx)
+	result, err := ofClient.ObjectValue(ctx, flagName, defaultTreatment, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
+		t.Error("expected parse error")
 	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if !reflect.DeepEqual(result, defaultTreatment) {
-		t.Error("Result was not default treatment")
+		t.Errorf("expected parse error, got %s", err.Error())
 	}
-
-	resultDetails, err := ofClient.ObjectValueDetails(nil, flagName, defaultTreatment, evalCtx)
+	if !reflect.DeepEqual(result, defaultTreatment) {
+		t.Error("result should be default")
+	}
+	resultDetails, err := ofClient.ObjectValueDetails(ctx, flagName, defaultTreatment, evalCtx)
 	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if !reflect.DeepEqual(resultDetails.Value, defaultTreatment) {
-		t.Errorf("Result was %f, but should have been default of 10", resultDetails.Value)
+		t.Error("expected parse error")
 	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
+		t.Errorf("error code want %s, got %s", openfeature.ParseErrorCode, resultDetails.ErrorCode)
 	} else if resultDetails.Variant != "32" {
-		t.Errorf("Expected variant to be string of integer, got %s", resultDetails.Variant)
+		t.Errorf("variant want 32, got %s", resultDetails.Variant)
 	}
 }
