@@ -31,22 +31,8 @@ func NewProvider(splitClient *client.SplitClient) (*SplitProvider, error) {
 }
 
 // NewProviderSimple creates a SplitProvider using the given API key and default config.
-// It is an alias for NewProviderWithAPIKey for backward compatibility.
 func NewProviderSimple(apiKey string) (*SplitProvider, error) {
-	return NewProviderWithAPIKey(apiKey)
-}
-
-// NewProviderWithAPIKey creates a SplitProvider using the given API key and default config.
-// The client is created internally and blocks until ready (up to 10 seconds).
-// For more control, create a Split client yourself and use NewProvider.
-func NewProviderWithAPIKey(apiKey string) (*SplitProvider, error) {
 	cfg := conf.Default()
-
-	// TODO: Remove this when we have a real API key.
-	cfg.Advanced.SdkURL = "https://sdk.split-stage.io/api"
-	cfg.Advanced.EventsURL = "https://events.split-stage.io/api"
-	cfg.Advanced.AuthServiceURL = "https://auth.split-stage.io"
-	cfg.Advanced.TelemetryServiceURL = "https://telemetry.split-stage.io/api/v1"
 
 	factory, err := client.NewSplitFactory(apiKey, cfg)
 	if err != nil {
