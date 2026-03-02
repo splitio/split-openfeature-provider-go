@@ -1,39 +1,87 @@
-package split_openfeature_provider_go
+//nolint:dupl,gocognit // Test patterns: type-specific tests have similar structure, comprehensive tests have higher complexity
+package split
 
 import (
-	"github.com/open-feature/go-sdk/pkg/openfeature"
-	"github.com/splitio/go-client/splitio/client"
-	"github.com/splitio/go-client/splitio/conf"
-	"github.com/splitio/go-toolkit/logging"
-	"reflect"
+	"context"
+	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/splitio/go-client/v6/splitio/conf"
+	"github.com/splitio/go-toolkit/v5/logging"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
+// Test flag names used across multiple tests
+const (
+	flagNonExistent   = "random-non-existent-feature"
+	flagSomeOther     = "some_other_feature"
+	flagMyFeature     = "my_feature"
+	flagInt           = "int_feature"
+	flagObj           = "obj_feature"
+	flagUnparseable   = "unparseable_feature"
+	flagMalformedJSON = "malformed_json_feature"
+	// treatmentOn and treatmentOff are defined in constants.go
+	treatmentUnparseable = "not-a-valid-type" // Treatment that cannot be parsed as bool/int/float
+	testClientName       = "test_client"
+	testSplitFile        = "testdata/split.yaml"
+	providerNameSplit    = "Split"
+)
+
+// TestMain adds goroutine leak detection to all tests.
+// Uses goleak to detect goroutine leaks from OUR code (external dependencies ignored).
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m,
+		// Ignore OpenFeature SDK event executor goroutines (created per test via SetProvider)
+		// Use IgnoreAnyFunction because these goroutines can be in various states
+		// Note: Function names differ between normal and race detector builds
+		goleak.IgnoreAnyFunction("github.com/open-feature/go-sdk/openfeature.(*eventExecutor).startEventListener.func1.1"),
+		goleak.IgnoreAnyFunction("github.com/open-feature/go-sdk/openfeature.newEventExecutor.(*eventExecutor).startEventListener.func1.1"), // -race variant
+		goleak.IgnoreAnyFunction("github.com/open-feature/go-sdk/openfeature.(*eventExecutor).startListeningAndShutdownOld.func1"),
+		goleak.IgnoreAnyFunction("github.com/open-feature/go-sdk/openfeature.newEventExecutor.(*eventExecutor).startListeningAndShutdownOld.func1"), // -race variant
+		goleak.IgnoreAnyFunction("github.com/open-feature/go-sdk/openfeature.(*eventExecutor).triggerEvent"),
+		// Ignore Split SDK background goroutines (created during individual tests)
+		goleak.IgnoreTopFunction("github.com/splitio/go-split-commons/v8/synchronizer.(*ManagerImpl).Start.func1"),
+		goleak.IgnoreTopFunction("github.com/splitio/go-split-commons/v8/synchronizer.(*ManagerImpl).StartBGSync.func1"),
+		// Ignore standard library goroutines
+		goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+		goleak.IgnoreTopFunction("time.Sleep"),
+	)
+}
+
+// create sets up a provider via the global OpenFeature SDK and returns a client.
+// Used for high-level OpenFeature API testing (BooleanValue, StringValue, etc.).
 func create(t *testing.T) *openfeature.Client {
+	t.Helper()
 	cfg := conf.Default()
-	cfg.SplitFile = "./split.yaml"
+	cfg.SplitFile = testSplitFile
 	cfg.LoggerConfig.LogLevel = logging.LevelNone
-	factory, err := client.NewSplitFactory("localhost", cfg)
-	if err != nil {
-		// error
-		t.Error("Error creating split factory")
-	}
-	splitClient := factory.Client()
-	err = splitClient.BlockUntilReady(10)
-	if err != nil {
-		// error timeout
-		t.Error("Split sdk timeout error")
-	}
-	provider, err := NewProvider(*splitClient)
-	if err != nil {
-		t.Error(err)
-	}
-	if provider == nil {
-		t.Error("Error creating Split Provider")
-	}
-	openfeature.SetProvider(provider)
-	return openfeature.NewClient("test_client")
+	cfg.BlockUntilReady = 10 // Must be positive
+
+	provider, err := New("localhost", WithSplitConfig(cfg))
+	require.NoError(t, err, "Failed to create provider")
+	require.NotNil(t, provider, "Provider should not be nil")
+
+	// Proper cleanup: Shutdown provider when test completes
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = openfeature.ShutdownWithContext(ctx)
+	})
+
+	// Use context-aware SetProviderWithContextAndWait (gold standard)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	err = openfeature.SetProviderWithContextAndWait(ctx, provider)
+	require.NoError(t, err, "Failed to set provider")
+
+	return openfeature.NewClient(testClientName)
 }
 
 func evaluationContext() openfeature.EvaluationContext {
@@ -41,411 +89,287 @@ func evaluationContext() openfeature.EvaluationContext {
 }
 
 func TestCreateSimple(t *testing.T) {
-	provider, err := NewProviderSimple("localhost")
-	if err != nil {
-		t.Error(err)
+	// Test New() with configuration
+	cfg := conf.Default()
+	cfg.SplitFile = testSplitFile
+	cfg.LoggerConfig.LogLevel = logging.LevelNone
+	cfg.BlockUntilReady = 10 // Must be positive
+
+	provider, err := New("localhost", WithSplitConfig(cfg))
+	require.NoError(t, err, "Provider creation should succeed")
+	assert.NotNil(t, provider, "Provider should not be nil")
+	defer func() { _ = provider.ShutdownWithContext(context.Background()) }()
+}
+
+// TestNewErrors tests error handling in New constructor.
+func TestNewErrors(t *testing.T) {
+	// Test with empty API key - should fail during factory creation
+	provider, err := New("")
+	assert.Error(t, err, "Empty API key should cause error")
+	assert.Nil(t, provider, "Provider should be nil when creation fails")
+
+	// Test with invalid API key format - Split SDK should reject it
+	provider, err = New("invalid-key-format-!@#$%")
+	// Note: Split SDK might accept any string as API key and only fail on network calls
+	_ = provider
+	_ = err
+}
+
+func TestMetadataReturnsProviderName(t *testing.T) {
+	ofClient := create(t)
+	assert.Equal(t, testClientName, ofClient.Metadata().Domain(), "Client name should match")
+	assert.Equal(t, providerNameSplit, openfeature.ProviderMetadata().Name, "Provider name should be 'Split'")
+}
+
+// TestLoggerConfiguration verifies all logger configuration scenarios work correctly.
+func TestLoggerConfiguration(t *testing.T) {
+	baseConfig := func() *conf.SplitSdkConfig {
+		cfg := conf.Default()
+		cfg.SplitFile = testSplitFile
+		cfg.LoggerConfig.LogLevel = logging.LevelNone
+		cfg.BlockUntilReady = 10
+		return cfg
 	}
-	if provider == nil {
-		t.Error("Error creating Split Provider")
+
+	tests := []struct {
+		setup                     func() (provider *Provider, customSlog *slog.Logger, customSplit *customTestLogger)
+		name                      string
+		expectSplitLoggerType     string
+		expectProviderUsesDefault bool
+	}{
+		{
+			name: "no logger specified uses defaults",
+			setup: func() (*Provider, *slog.Logger, *customTestLogger) {
+				p, err := New("localhost")
+				require.NoError(t, err)
+				return p, nil, nil
+			},
+			expectProviderUsesDefault: true,
+			expectSplitLoggerType:     "adapter",
+		},
+		{
+			name: "with logger option uses custom for both",
+			setup: func() (*Provider, *slog.Logger, *customTestLogger) {
+				var buf strings.Builder
+				customLogger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+				p, err := New("localhost", WithLogger(customLogger))
+				require.NoError(t, err)
+				return p, customLogger, nil
+			},
+			expectProviderUsesDefault: false,
+			expectSplitLoggerType:     "adapter",
+		},
+		{
+			name: "split config logger only preserves custom split logger",
+			setup: func() (*Provider, *slog.Logger, *customTestLogger) {
+				customSplitLogger := &customTestLogger{logs: make([]string, 0)}
+				cfg := baseConfig()
+				cfg.Logger = customSplitLogger
+				p, err := New("localhost", WithSplitConfig(cfg))
+				require.NoError(t, err)
+				return p, nil, customSplitLogger
+			},
+			expectProviderUsesDefault: true,
+			expectSplitLoggerType:     "custom",
+		},
+		{
+			name: "both loggers uses each respectively",
+			setup: func() (*Provider, *slog.Logger, *customTestLogger) {
+				var buf strings.Builder
+				customSlogLogger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+				customSplitLogger := &customTestLogger{logs: make([]string, 0)}
+				cfg := baseConfig()
+				cfg.Logger = customSplitLogger
+				p, err := New("localhost", WithLogger(customSlogLogger), WithSplitConfig(cfg))
+				require.NoError(t, err)
+				return p, customSlogLogger, customSplitLogger
+			},
+			expectProviderUsesDefault: false,
+			expectSplitLoggerType:     "custom",
+		},
+		{
+			name: "with logger and empty split config uses custom for both",
+			setup: func() (*Provider, *slog.Logger, *customTestLogger) {
+				var buf strings.Builder
+				customLogger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+				cfg := baseConfig()
+				p, err := New("localhost", WithLogger(customLogger), WithSplitConfig(cfg))
+				require.NoError(t, err)
+				return p, customLogger, nil
+			},
+			expectProviderUsesDefault: false,
+			expectSplitLoggerType:     "adapter",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider, _, customSplitLogger := tt.setup()
+			defer func() { _ = provider.ShutdownWithContext(context.Background()) }()
+
+			assert.NotNil(t, provider.logger, "Provider logger should be set")
+			assert.NotNil(t, provider.splitConfig.Logger, "Split SDK logger should be set")
+
+			switch tt.expectSplitLoggerType {
+			case "adapter":
+				adapter, ok := provider.splitConfig.Logger.(*SlogToSplitAdapter)
+				require.True(t, ok, "Split SDK logger should be SlogToSplitAdapter")
+				assert.NotNil(t, adapter.logger, "Adapter should have a logger")
+
+			case "custom":
+				assert.Equal(t, customSplitLogger, provider.splitConfig.Logger,
+					"Split SDK should preserve custom logger (not overwritten)")
+			}
+		})
 	}
 }
 
-func TestUseDefault(t *testing.T) {
-	ofClient := create(t)
-	flagName := "random-non-existent-feature"
-	evalCtx := evaluationContext()
+// customTestLogger implements the Split SDK logging interface for testing.
+// Thread-safe to handle concurrent calls from Split SDK goroutines.
+type customTestLogger struct {
+	logs []string
+	mu   sync.Mutex
+}
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
-	if err == nil {
-		t.Error("Should have returned flag not found error")
-	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been default value of false")
+func (l *customTestLogger) Error(msg ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logs = append(l.logs, fmt.Sprint("ERROR: ", msg))
+}
+
+func (l *customTestLogger) Warning(msg ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logs = append(l.logs, fmt.Sprint("WARN: ", msg))
+}
+
+func (l *customTestLogger) Info(msg ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logs = append(l.logs, fmt.Sprint("INFO: ", msg))
+}
+
+func (l *customTestLogger) Debug(msg ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logs = append(l.logs, fmt.Sprint("DEBUG: ", msg))
+}
+
+func (l *customTestLogger) Verbose(msg ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.logs = append(l.logs, fmt.Sprint("VERBOSE: ", msg))
+}
+
+func TestSplitsChanged(t *testing.T) {
+	tests := []struct {
+		name    string
+		old     map[string]int64
+		current map[string]int64
+		want    bool
+	}{
+		{
+			name:    "identical maps",
+			old:     map[string]int64{"a": 1, "b": 2},
+			current: map[string]int64{"a": 1, "b": 2},
+			want:    false,
+		},
+		{
+			name:    "both empty",
+			old:     map[string]int64{},
+			current: map[string]int64{},
+			want:    false,
+		},
+		{
+			name:    "split added",
+			old:     map[string]int64{"a": 1},
+			current: map[string]int64{"a": 1, "b": 2},
+			want:    true,
+		},
+		{
+			name:    "split removed",
+			old:     map[string]int64{"a": 1, "b": 2},
+			current: map[string]int64{"a": 1},
+			want:    true,
+		},
+		{
+			name:    "change number updated",
+			old:     map[string]int64{"a": 1, "b": 2},
+			current: map[string]int64{"a": 1, "b": 3},
+			want:    true,
+		},
+		{
+			name:    "split replaced",
+			old:     map[string]int64{"a": 1, "b": 2},
+			current: map[string]int64{"a": 1, "c": 2},
+			want:    true,
+		},
+		{
+			name:    "old nil current empty",
+			old:     nil,
+			current: map[string]int64{},
+			want:    false,
+		},
+		{
+			name:    "old empty current has splits",
+			old:     map[string]int64{},
+			current: map[string]int64{"a": 1},
+			want:    true,
+		},
 	}
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
-	if err == nil {
-		t.Error("Should have returned flag not found error")
-	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == false {
-		t.Error("Result was false, but should have been default value of true")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitsChanged(tt.old, tt.current)
+			assert.Equal(t, tt.want, got)
+		})
 	}
 }
 
-func TestMissingTargetingKey(t *testing.T) {
-	ofClient := create(t)
-	flagName := "random-non-existent-feature"
+func TestWithMonitoringIntervalClamping(t *testing.T) {
+	cfg := conf.Default()
+	cfg.SplitFile = testSplitFile
+	cfg.LoggerConfig.LogLevel = logging.LevelNone
+	cfg.BlockUntilReady = 10
 
-	result, err := ofClient.BooleanValue(nil, flagName, false, openfeature.EvaluationContext{})
-	if err == nil {
-		t.Error("Should have returned targeting key missing error")
-	} else if !strings.Contains(err.Error(), string(openfeature.TargetingKeyMissingCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been default value of false")
-	}
-}
-
-func TestGetControlVariantNonExistentSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "random-non-existent-feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
-	if err == nil {
-		t.Error("Should have returned flag not found error")
-	} else if !strings.Contains(err.Error(), string(openfeature.FlagNotFoundCode)) {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.Value == true {
-		t.Error("Result was true, but should have been default value of false")
-	} else if result.Variant != "control" {
-		t.Error("Variant should be control due to Split Go SDK functionality")
-	}
-}
-
-func TestGetBooleanSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "some_other_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.BooleanValue(nil, flagName, true, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been false as set in split.yaml")
-	}
-}
-
-func TestGetBooleanWithKeySplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "my_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == false {
-		t.Error("Result was false, but should have been true as set in split.yaml")
+	tests := []struct {
+		name     string
+		interval time.Duration
+		expected time.Duration
+	}{
+		{
+			name:     "zero uses default",
+			interval: 0,
+			expected: 30 * time.Second,
+		},
+		{
+			name:     "below minimum clamped to minimum",
+			interval: 1 * time.Second,
+			expected: 5 * time.Second,
+		},
+		{
+			name:     "at minimum accepted",
+			interval: 5 * time.Second,
+			expected: 5 * time.Second,
+		},
+		{
+			name:     "above minimum accepted",
+			interval: 60 * time.Second,
+			expected: 60 * time.Second,
+		},
 	}
 
-	evalCtx = openfeature.NewEvaluationContext("randomKey", nil)
-	result, err = ofClient.BooleanValue(nil, flagName, true, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result == true {
-		t.Error("Result was true, but should have been false as set in split.yaml")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var opts []Option
+			if tt.interval != 0 {
+				opts = append(opts, WithMonitoringInterval(tt.interval))
+			}
+			provider, err := New("localhost", append(opts, WithSplitConfig(cfg))...)
+			require.NoError(t, err)
+			defer func() { _ = provider.ShutdownWithContext(context.Background()) }()
 
-func TestGetStringSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "some_other_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.StringValue(nil, flagName, "on", evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != "off" {
-		t.Errorf("Result was %s, not off as set in split.yaml", result)
-	}
-}
-
-func TestGetIntegerSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "int_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.IntValue(nil, flagName, 0, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != 32 {
-		t.Errorf("Result was %d, not 32 as set in split.yaml", result)
-	}
-}
-
-func TestGetObjectSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "obj_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.ObjectValue(nil, flagName, 0, evalCtx)
-	expectedResult := map[string]interface{}{
-		"key": "value",
-	}
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if !reflect.DeepEqual(result, expectedResult) {
-		t.Error("Result was not map from key to value as set in split.yaml")
-	}
-}
-
-func TestGetFloatSplit(t *testing.T) {
-	ofClient := create(t)
-	flagName := "int_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.FloatValue(nil, flagName, 0, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result != float64(32) {
-		t.Errorf("Result was %f, not 32 as set in split.yaml", result)
-	}
-}
-
-func TestMetadataName(t *testing.T) {
-	ofClient := create(t)
-	if ofClient.Metadata().Name() != "test_client" {
-		t.Error("Client name was not set properly")
-	}
-	if openfeature.ProviderMetadata().Name != "Split" {
-		t.Errorf("Provider metadata name was %s, not Split", openfeature.ProviderMetadata().Name)
-	}
-}
-
-func TestBooleanDetails(t *testing.T) {
-	ofClient := create(t)
-	flagName := "some_other_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.BooleanValueDetails(nil, flagName, true, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value == true {
-		t.Error("Result was true, but should have been false as in split.yaml")
-	} else if result.Variant != "off" {
-		t.Errorf("Variant should be off as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-}
-
-func TestIntegerDetails(t *testing.T) {
-	ofClient := create(t)
-	flagName := "int_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.IntValueDetails(nil, flagName, 0, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != int64(32) {
-		t.Errorf("Result was %d, but should have been 32 as in split.yaml", result.Value)
-	} else if result.Variant != "32" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-}
-
-func TestStringDetails(t *testing.T) {
-	ofClient := create(t)
-	flagName := "some_other_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.StringValueDetails(nil, flagName, "blah", evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != "off" {
-		t.Errorf("Result was %s, but should have been off as in split.yaml", result.Value)
-	} else if result.Variant != "off" {
-		t.Errorf("Variant should be off as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-}
-
-func TestObjectDetails(t *testing.T) {
-	ofClient := create(t)
-	flagName := "obj_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.ObjectValueDetails(nil, flagName, map[string]interface{}{}, evalCtx)
-	expectedResult := map[string]interface{}{
-		"key": "value",
-	}
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if !reflect.DeepEqual(result.Value, expectedResult) {
-		t.Error("Result was not map of key->value as in split.yaml")
-	} else if result.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Variant should be {\"key\": \"value\"} as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-}
-
-func TestFloatDetails(t *testing.T) {
-	ofClient := create(t)
-	flagName := "int_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.FlagKey != flagName {
-		t.Errorf("Flag name is %s, not %s", result.FlagKey, flagName)
-	} else if !strings.Contains(string(result.Reason), string(openfeature.TargetingMatchReason)) {
-		t.Errorf("reason is %s, not targeting match", result.Reason)
-	} else if result.Value != float64(32) {
-		t.Errorf("Result was %f, but should have been 32 as in split.yaml", result.Value)
-	} else if result.Variant != "32" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-
-	flagName = "float_feature"
-	result, err = ofClient.FloatValueDetails(nil, flagName, 0, evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error occurred %s", err.Error())
-	} else if result.Value != 32.5 {
-		t.Errorf("Result was %f, but should have been 32.5 as in split.yaml", result.Value)
-	} else if result.Variant != "32.5" {
-		t.Errorf("Variant should be 32 as in split.yaml, but was %s", result.Variant)
-	} else if result.ErrorCode != "" {
-		t.Errorf("Unexpected error in result %s", result.ErrorCode)
-	}
-}
-
-func TestBooleanFail(t *testing.T) {
-	// attempt to fetch an object treatment as a boolean. Should result in the default
-	ofClient := create(t)
-	flagName := "obj_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.BooleanValue(nil, flagName, false, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != false {
-		t.Error("Result was true, but should have been default of false")
-	}
-
-	resultDetails, err := ofClient.BooleanValueDetails(nil, flagName, false, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != false {
-		t.Error("Result was true, but should have been default of false")
-	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
-	}
-}
-
-func TestIntegerFail(t *testing.T) {
-	// attempt to fetch an object treatment as an integer. Should result in the default
-	ofClient := create(t)
-	flagName := "obj_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.IntValue(nil, flagName, 10, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != int64(10) {
-		t.Errorf("Result was %d, but should have been default of 10", result)
-	}
-
-	resultDetails, err := ofClient.IntValueDetails(nil, flagName, 10, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != int64(10) {
-		t.Errorf("Result was %d, but should have been default of 10", resultDetails.Value)
-	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
-	}
-}
-
-func TestFloatFail(t *testing.T) {
-	// attempt to fetch an object treatment as a float. Should result in the default
-	ofClient := create(t)
-	flagName := "obj_feature"
-	evalCtx := evaluationContext()
-
-	result, err := ofClient.FloatValue(nil, flagName, 10, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if result != float64(10) {
-		t.Errorf("Result was %f, but should have been default of 10", result)
-	}
-
-	resultDetails, err := ofClient.FloatValueDetails(nil, flagName, 10, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if resultDetails.Value != float64(10) {
-		t.Errorf("Result was %f, but should have been default of 10", resultDetails.Value)
-	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "{\"key\": \"value\"}" {
-		t.Errorf("Expected variant to be string of map, got %s", resultDetails.Variant)
-	}
-}
-
-func TestObjectFail(t *testing.T) {
-	// attempt to fetch an int as an object. Should result in the default
-	ofClient := create(t)
-	flagName := "int_feature"
-	evalCtx := evaluationContext()
-	defaultTreatment := map[string]interface{}{
-		"key": "value",
-	}
-
-	result, err := ofClient.ObjectValue(nil, flagName, defaultTreatment, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if !reflect.DeepEqual(result, defaultTreatment) {
-		t.Error("Result was not default treatment")
-	}
-
-	resultDetails, err := ofClient.ObjectValueDetails(nil, flagName, defaultTreatment, evalCtx)
-	if err == nil {
-		t.Error("Expected exception to occur")
-	} else if !strings.Contains(err.Error(), string(openfeature.ParseErrorCode)) {
-		t.Errorf("Expected parse error, got %s", err.Error())
-	} else if !reflect.DeepEqual(resultDetails.Value, defaultTreatment) {
-		t.Errorf("Result was %f, but should have been default of 10", resultDetails.Value)
-	} else if resultDetails.ErrorCode != openfeature.ParseErrorCode {
-		t.Errorf("Expected parse error code, got %s", resultDetails.ErrorCode)
-	} else if resultDetails.Reason != openfeature.ErrorReason {
-		t.Errorf("Expected error reason code, got %s", resultDetails.Reason)
-	} else if resultDetails.Variant != "32" {
-		t.Errorf("Expected variant to be string of integer, got %s", resultDetails.Variant)
+			assert.Equal(t, tt.expected, provider.monitoringInterval)
+		})
 	}
 }

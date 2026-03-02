@@ -1,0 +1,107 @@
+# Split Localhost Mode - Integration Test Flags
+#
+# Format:
+#   - flag_name:
+#       treatment: "value"           # Required: Treatment (must be a string)
+#       keys: "key1,key2"            # Optional: Comma-separated targeting keys
+#       config: '{"key": "value"}'   # Optional: Dynamic Configuration (JSON)
+#
+# Documentation: https://developer.harness.io/docs/feature-management-experimentation/sdks-and-infrastructure/server-side-sdks/go-sdk#yaml
+
+# Boolean Flags - Simple on/off features
+- feature_boolean_on:
+    treatment: "on"
+    config: '{"enabled_at": "2024-01-01T00:00:00Z"}'
+
+- feature_boolean_off:
+    treatment: "off"
+
+# String Flags - Multi-variant features
+- ui_theme:
+    treatment: "dark"
+    config: '{"primary_color": "#1a1a1a", "accent_color": "#4a9eff"}'
+
+- api_version:
+    treatment: "v2"
+    config: '{"endpoint": "https://api.example.com/v2", "timeout_ms": 5000}'
+
+# Integer Flags - Numeric configuration
+- max_retries:
+    treatment: "5"
+    config: '{"backoff_ms": 1000, "exponential": true}'
+
+- page_size:
+    treatment: "50"
+
+- timeout_seconds:
+    treatment: "30"
+
+# Float Flags - Percentage and decimal values
+- discount_rate:
+    treatment: "0.15"
+    config: '{"min_order": 50, "max_discount": 100}'
+
+- cache_hit_ratio:
+    treatment: "0.85"
+
+- sampling_rate:
+    treatment: "0.01"
+
+# Object Flags - Complex JSON configuration via Dynamic Configuration
+- feature_config:
+    treatment: "enabled"
+    config: '{"enabled": true, "rollout_percentage": 100, "metadata": {"owner": "platform-team", "launched": "2024-01-15"}}'
+
+- premium_features:
+    treatment: "on"
+    config: '{"analytics": true, "ai_assistant": true, "priority_support": true, "custom_domains": false}'
+
+- ab_test_config:
+    treatment: "treatment_a"
+    config: '{"variant": "treatment_a", "cohort": "experimental", "tracking_id": "exp_001"}'
+
+# Targeting with Keys - User-specific overrides
+- beta_features:
+    treatment: "on"
+    keys: "user-vip,user-beta-tester"
+    config: '{"features": ["new_dashboard", "advanced_analytics"]}'
+
+- regional_feature:
+    treatment: "enabled"
+    keys: "user-us,user-uk"
+
+# Control Treatment - Default/fallback behavior
+- experimental_algorithm:
+    treatment: "control"
+    config: '{"reason": "not_in_experiment"}'
+
+# System Flags - Operational controls
+- maintenance_mode:
+    treatment: "off"
+
+- debug_logging:
+    treatment: "off"
+
+- rate_limit_enabled:
+    treatment: "on"
+    config: '{"requests_per_minute": 1000, "burst": 1500}'
+
+# Multi-variant Flags - A/B/C testing
+- homepage_variant:
+    treatment: "variant_b"
+    config: '{"layout": "grid", "hero_image": "v2.jpg", "cta_text": "Get Started"}'
+
+- pricing_page:
+    treatment: "pricing_v3"
+    config: '{"annual_discount": 0.20, "show_enterprise": true}'
+
+# Migration Flags - Gradual rollout
+- new_checkout_flow:
+    treatment: "on"
+    keys: "user-vip,user-beta-tester,user-123"
+    config: '{"version": "2.0", "analytics_tracking": true}'
+
+# Onboarding Flow - Complex workflow
+- onboarding_version:
+    treatment: "v2"
+    config: '{"steps": ["welcome", "profile", "preferences", "tutorial", "done"], "skip_allowed": true, "progress_tracking": true}'
