@@ -1,4 +1,4 @@
-2.0.0 (Feb x, 2026)
+2.0.0 (March 10, 2026)
 - BREAKING CHANGES:
  - Use openfeature.SetProviderAndWait.
  - Client methods take context.Context as first argument.
