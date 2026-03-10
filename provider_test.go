@@ -273,6 +273,49 @@ func TestMetadataName(t *testing.T) {
 	}
 }
 
+// TestEvaluationWithAttributes ensures that when the evaluation context contains
+// attributes (in addition to the targeting key), they are passed to Split via splitKeyAndAttributes.
+func TestEvaluationWithAttributes(t *testing.T) {
+	ofClient := create(t)
+	flagName := "my_feature"
+	flatCtx := openfeature.NewEvaluationContext("key", map[string]any{"trafficType": "user", "region": "eu"})
+
+	result, err := ofClient.BooleanValue(context.Background(), flagName, false, flatCtx)
+	if err != nil {
+		t.Errorf("Unexpected error with attributes in context: %s", err.Error())
+	}
+	if result != true {
+		t.Error("Result was false, but should have been true for key as set in split.yaml")
+	}
+}
+
+// TestDetailsIncludeConfigMetadata verifies that when Split returns treatment config (e.g. my_feature for key "key"),
+// the resolution details include it under FlagMetadata["config"].
+func TestDetailsIncludeConfigMetadata(t *testing.T) {
+	ofClient := create(t)
+	flagName := "my_feature"
+	evalCtx := evaluationContext()
+
+	details, err := ofClient.BooleanValueDetails(context.Background(), flagName, false, evalCtx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err.Error())
+	}
+	if details.Value != true {
+		t.Error("Expected my_feature to be on for key")
+	}
+	if details.FlagMetadata == nil {
+		t.Fatal("Expected FlagMetadata to be set")
+	}
+	config, ok := details.FlagMetadata["config"].(string)
+	if !ok || config == "" {
+		t.Errorf("Expected FlagMetadata[\"config\"] to be a non-empty string, got %v", details.FlagMetadata["config"])
+	}
+	expectedConfig := "{\"desc\" : \"this applies only to ON treatment\"}"
+	if config != expectedConfig {
+		t.Errorf("Expected config %q, got %q", expectedConfig, config)
+	}
+}
+
 func TestBooleanDetails(t *testing.T) {
 	ofClient := create(t)
 	flagName := "some_other_feature"

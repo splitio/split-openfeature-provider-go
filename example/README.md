@@ -4,7 +4,7 @@ This folder contains runnable examples to manually test all provider scenarios.
 
 ## Requirements
 
-- Go 1.21+ (same as the root module)
+- Go 1.24+ (same as the root module)
 - Run from the repo root: `go run ./example` or from `example/`: `go run .`
 
 ## Main example (`main.go`)
