@@ -1,4 +1,16 @@
-1.0.0
-- 10/3/2022. Up to date with spec v0.5.0 and go sdk v0.5.0
-1.0.1
-- 10/14/2022. Up to date with spec v0.5.0 and go sdk v0.6.0
+2.0.0 (March 10, 2026)
+- BREAKING CHANGES:
+ - Use openfeature.SetProviderAndWait.
+ - Client methods take context.Context as first argument.
+ - NewProvider accepts *client.SplitClient.
+ - NewProviderWithAPIKey and NewProviderSimple for API-key setup.
+- Upgraded to OpenFeature Go SDK v1.17.x and Split Go Client v6.10.x.
+- Added FlagMetadata["config"] with Split treatment config on resolution details (aligned with Java/.NET/Python providers).
+- Implemented Tracker: Track(ctx, eventName, evalCtx, details) forwards to Split SDK (requires targetingKey and trafficType in context).
+- Minimum Go version: 1.21.
+
+1.0.1 (Oct 14, 2022)
+- Up to date with spec v0.5.0 and go sdk v0.6.0
+
+1.0.0 (Oct 3, 2022)
+- Up to date with spec v0.5.0 and go sdk v0.5.0
