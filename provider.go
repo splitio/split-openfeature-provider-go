@@ -40,13 +40,6 @@ func NewProviderSimple(apiKey string) (*SplitProvider, error) {
 // For more control, create a Split client yourself and use NewProvider.
 func NewProviderWithAPIKey(apiKey string) (*SplitProvider, error) {
 	cfg := conf.Default()
-
-	// TODO: Remove this when we have a real API key.
-	cfg.Advanced.SdkURL = "https://sdk.split-stage.io/api"
-	cfg.Advanced.EventsURL = "https://events.split-stage.io/api"
-	cfg.Advanced.AuthServiceURL = "https://auth.split-stage.io"
-	cfg.Advanced.TelemetryServiceURL = "https://telemetry.split-stage.io/api/v1"
-
 	factory, err := client.NewSplitFactory(apiKey, cfg)
 	if err != nil {
 		return nil, err
