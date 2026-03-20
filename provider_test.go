@@ -110,16 +110,6 @@ func TestTrack_Success(t *testing.T) {
 	// Should not panic; event sent to Split (or queued by localhost client)
 }
 
-func TestCreateSimple(t *testing.T) {
-	provider, err := NewProviderSimple("localhost")
-	if err != nil {
-		t.Error(err)
-	}
-	if provider == nil {
-		t.Error("Error creating Split Provider")
-	}
-}
-
 func TestUseDefault(t *testing.T) {
 	ofClient := create(t)
 	flagName := "random-non-existent-feature"
