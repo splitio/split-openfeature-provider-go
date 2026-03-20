@@ -1,6 +1,6 @@
 module github.com/splitio/split-openfeature-provider-go/examples
 
-go 1.24.1
+go 1.24.0
 
 require (
 	github.com/open-feature/go-sdk v1.17.1
