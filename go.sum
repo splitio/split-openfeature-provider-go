@@ -28,8 +28,6 @@ github.com/splitio/go-client/v6 v6.10.0 h1:jEeNGq7sxu80u077MvF/oFTGHjbKVejnhzMGm
 github.com/splitio/go-client/v6 v6.10.0/go.mod h1:ag4TYayrK8WJMUhSj54xFQEyJ+HcUgMimFKXQ8JwIzo=
 github.com/splitio/go-split-commons/v9 v9.1.0 h1:sfmPMuEDTtbIOJ+MeWNbfYl2/xKB/25d4/J95OUD+X0=
 github.com/splitio/go-split-commons/v9 v9.1.0/go.mod h1:gJuaKo04Swlh4w9C1b2jBAqAdFxEd/Vpd8jnFINOeDY=
-github.com/splitio/go-toolkit v4.2.1-0.20210714181516-85e7c471376a+incompatible h1:vK8jmQOWqghCU9ZYPjHfrngpugLOFsc4tUMa4OqRk8M=
-github.com/splitio/go-toolkit v4.2.1-0.20210714181516-85e7c471376a+incompatible/go.mod h1:Oygm4Hgf3KotB5ZAaXIluLk5HgH2qu723HEPNvszJi8=
 github.com/splitio/go-toolkit/v5 v5.4.1 h1:srTyvDBJZMUcJ/KiiQDMyjCuELVgTBh2TGRVn0sOXEE=
 github.com/splitio/go-toolkit/v5 v5.4.1/go.mod h1:SifzysrOVDbzMcOE8zjX02+FG5az4FrR3Us/i5SeStw=
 github.com/stretchr/objx v0.5.2 h1:xuMeJ0Sdp5ZMRXx/aWO6RZxdr3beISkG5/G/aIRr3pY=

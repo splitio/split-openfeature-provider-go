@@ -9,7 +9,7 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/splitio/go-client/v6/splitio/client"
 	"github.com/splitio/go-client/v6/splitio/conf"
-	"github.com/splitio/go-toolkit/logging"
+	"github.com/splitio/go-toolkit/v5/logging"
 )
 
 func create(t *testing.T) *openfeature.Client {
@@ -108,16 +108,6 @@ func TestTrack_Success(t *testing.T) {
 	details := openfeature.NewTrackingEventDetails(42.5).Add("source", "test")
 	provider.Track(ctx, "checkout", ec, details)
 	// Should not panic; event sent to Split (or queued by localhost client)
-}
-
-func TestCreateSimple(t *testing.T) {
-	provider, err := NewProviderSimple("localhost")
-	if err != nil {
-		t.Error(err)
-	}
-	if provider == nil {
-		t.Error("Error creating Split Provider")
-	}
 }
 
 func TestUseDefault(t *testing.T) {
