@@ -18,7 +18,8 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/splitio/go-client/v6/splitio/client"
 	"github.com/splitio/go-client/v6/splitio/conf"
-	splitProvider "github.com/splitio/split-openfeature-provider-go"
+
+	splitProvider "github.com/splitio/split-openfeature-provider-go/v2"
 )
 
 func main() {
