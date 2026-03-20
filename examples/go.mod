@@ -1,11 +1,11 @@
-module github.com/splitio/split-openfeature-provider-go/example
+module github.com/splitio/split-openfeature-provider-go/examples
 
-go 1.24.0
+go 1.24.1
 
 require (
 	github.com/open-feature/go-sdk v1.17.1
 	github.com/splitio/go-client/v6 v6.10.0
-	github.com/splitio/split-openfeature-provider-go v0.0.0
+	github.com/splitio/split-openfeature-provider-go/v2 v2.0.0
 )
 
 require (
@@ -27,4 +27,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/splitio/split-openfeature-provider-go => ../
+replace github.com/splitio/split-openfeature-provider-go/v2 => ../

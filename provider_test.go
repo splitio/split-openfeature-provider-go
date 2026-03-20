@@ -9,7 +9,7 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/splitio/go-client/v6/splitio/client"
 	"github.com/splitio/go-client/v6/splitio/conf"
-	"github.com/splitio/go-toolkit/logging"
+	"github.com/splitio/go-toolkit/v5/logging"
 )
 
 func create(t *testing.T) *openfeature.Client {

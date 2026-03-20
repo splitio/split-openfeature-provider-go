@@ -1,11 +1,11 @@
-module github.com/splitio/split-openfeature-provider-go
+module github.com/splitio/split-openfeature-provider-go/v2
 
-go 1.24.0
+go 1.24.1
 
 require (
 	github.com/open-feature/go-sdk v1.17.1
 	github.com/splitio/go-client/v6 v6.10.0
-	github.com/splitio/go-toolkit v4.2.1-0.20210714181516-85e7c471376a+incompatible
+	github.com/splitio/go-toolkit/v5 v5.4.1
 )
 
 require (
@@ -18,7 +18,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/redis/go-redis/v9 v9.0.4 // indirect
 	github.com/splitio/go-split-commons/v9 v9.1.0 // indirect
-	github.com/splitio/go-toolkit/v5 v5.4.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
